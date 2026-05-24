@@ -3,6 +3,7 @@ type WorkUpCloudflareEnv = {
   NEXT_PUBLIC_SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;
   DEEPSEEK_API_KEY?: string;
+  DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;
 };
 

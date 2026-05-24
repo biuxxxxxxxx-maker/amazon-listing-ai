@@ -85,7 +85,7 @@ type DeepSeekResponse = {
 
 const AI_REQUEST_TIMEOUT_MS = 20000;
 const AI_UNAVAILABLE_STATUS_CODES = new Set([401, 403, 429]);
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions";
+const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions";
 const STRICT_JSON_INSTRUCTIONS = `
 Return strict JSON only. Do not use Markdown code fences. Do not add any fields outside this shape:
 {
@@ -197,12 +197,13 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
   }
 
   const model = (await readServerEnv("DEEPSEEK_MODEL")) || "deepseek-chat";
+  const baseUrl = (await readServerEnv("DEEPSEEK_BASE_URL")) || DEFAULT_DEEPSEEK_BASE_URL;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
   let response: Response;
 
   try {
-    response = await fetch(DEEPSEEK_BASE_URL, {
+    response = await fetch(baseUrl, {
       method: "POST",
       signal: controller.signal,
       headers: {

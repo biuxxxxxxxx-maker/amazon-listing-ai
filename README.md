@@ -51,6 +51,7 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 AI_PROVIDER=deepseek
 DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com/chat/completions
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
@@ -74,6 +75,7 @@ Behavior:
 
 - Without a usable `DEEPSEEK_API_KEY`, the route returns the structured local mock result.
 - With a usable `DEEPSEEK_API_KEY`, the route calls DeepSeek Chat Completions and asks for structured bilingual Amazon Listing JSON.
+- `DEEPSEEK_BASE_URL` defaults to `https://api.deepseek.com/chat/completions`.
 - Set `DEEPSEEK_MODEL` to `deepseek-chat` or `deepseek-reasoner`.
 - If the key is malformed, expired, unauthorized, or the account has no API balance, the route falls back to mock instead of breaking the page.
 - The result page can save generated output into `generation_results`.
@@ -96,6 +98,7 @@ npx wrangler login
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 AI_PROVIDER=deepseek
+DEEPSEEK_BASE_URL=https://api.deepseek.com/chat/completions
 DEEPSEEK_MODEL=deepseek-chat
 ```
 
@@ -139,6 +142,7 @@ Register/Login -> Dashboard -> New Listing -> Result Page -> Generate -> Save Re
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Auth and database | Public anon key only |
 | `AI_PROVIDER` | No | AI provider selection | Set to `deepseek` |
 | `DEEPSEEK_API_KEY` | No | Real AI generation | Never add `NEXT_PUBLIC_` |
+| `DEEPSEEK_BASE_URL` | No | Real AI generation | Defaults to DeepSeek Chat Completions URL |
 | `DEEPSEEK_MODEL` | No | Real AI generation | Defaults to `deepseek-chat`; can use `deepseek-reasoner` |
 
 ## Current Scope
