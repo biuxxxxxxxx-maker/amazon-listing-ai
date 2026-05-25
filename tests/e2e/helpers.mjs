@@ -169,6 +169,8 @@ export async function signInWithMockSession(page) {
 export function corsJsonHeaders() {
   return {
     "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+    "access-control-allow-headers": "apikey, authorization, content-type, x-client-info",
     "content-type": "application/json",
   };
 }

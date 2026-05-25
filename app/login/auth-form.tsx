@@ -44,25 +44,26 @@ async function requestSupabaseAuth(mode: AuthMode, email: string, password: stri
 }
 
 function toChineseAuthError(message: string, mode: AuthMode) {
-  const lowerMessage = message.toLowerCase();
+  const rawMessage = message.trim() || "Supabase 没有返回具体错误。";
+  const lowerMessage = rawMessage.toLowerCase();
 
   if (lowerMessage.includes("invalid login")) {
-    return "登录失败，请检查邮箱和密码。";
+    return `登录失败，请检查邮箱和密码。Supabase 返回：${rawMessage}`;
   }
 
   if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
-    return "这个邮箱已经注册过，请直接登录。";
+    return `这个邮箱已经注册过，请直接登录。Supabase 返回：${rawMessage}`;
   }
 
   if (lowerMessage.includes("password")) {
-    return "密码不符合要求，请至少填写 6 位。";
+    return `密码不符合要求，请至少填写 6 位。Supabase 返回：${rawMessage}`;
   }
 
   if (lowerMessage.includes("email")) {
-    return "邮箱格式不正确，或需要先完成邮箱验证。";
+    return `邮箱格式不正确，或需要先完成邮箱验证。Supabase 返回：${rawMessage}`;
   }
 
-  return mode === "signin" ? "登录失败，请检查邮箱和密码。" : "注册失败，请检查邮箱或密码。";
+  return `${mode === "signin" ? "登录失败" : "注册失败"}：${rawMessage}`;
 }
 
 export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode }) {
@@ -77,17 +78,28 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
   async function submitAuth(form: HTMLFormElement, mode: AuthMode) {
     setError("");
     setNotice("");
-    setLoadingMode(mode);
 
     const formData = new FormData(form);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
 
+    if (!email) {
+      setError("请填写邮箱。");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("密码至少 6 位。");
+      return;
+    }
+
+    setLoadingMode(mode);
+
     try {
       const session = await requestSupabaseAuth(mode, email, password);
 
       if (!session.access_token) {
-        setNotice("注册成功，但当前 Supabase 项目需要邮箱验证。请先完成邮箱确认后再登录。");
+        setNotice("注册成功，请检查邮箱完成验证后再登录。");
         return;
       }
 
@@ -111,7 +123,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
   }
 
   async function handleSignUp() {
-    if (!formRef.current?.reportValidity()) {
+    if (!formRef.current) {
       return;
     }
 
@@ -119,7 +131,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
   }
 
   return (
-    <form ref={formRef} className="space-y-4 px-6 py-6 sm:px-8" onSubmit={handleSubmit}>
+    <form ref={formRef} className="space-y-4 px-6 py-6 sm:px-8" onSubmit={handleSubmit} noValidate>
       {error ? (
         <div className="rounded-lg border border-orange-200 bg-amberSoft p-3 text-sm leading-6 text-[#8a5a1e]">
           {error}
@@ -165,6 +177,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
       </Button>
       {initialMode === "signin" ? (
         <Button
+          data-testid="auth-signup-button"
           type="button"
           variant="secondary"
           size="lg"

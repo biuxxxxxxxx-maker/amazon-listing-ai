@@ -5,6 +5,7 @@ import { FeatureGrid } from "@/components/landing/feature-grid";
 import { FinalCta } from "@/components/landing/final-cta";
 import { Hero } from "@/components/landing/hero";
 import { ProcessStrip } from "@/components/landing/process-strip";
+import { mockGenerationResult } from "@/lib/mock-generation-result";
 
 export function HomePageContent() {
   const router = useRouter();
@@ -22,10 +23,17 @@ export function HomePageContent() {
 
   return (
     <main>
-      <Hero onGenerate={startListingFlow} />
+      <Hero
+        result={mockGenerationResult}
+        isGenerating={false}
+        demoMode={false}
+        statusMessage=""
+        errorMessage=""
+        onGenerate={startListingFlow}
+      />
       <ProcessStrip />
       <FeatureGrid />
-      <FinalCta onGenerate={startListingFlow} />
+      <FinalCta isGenerating={false} onGenerate={startListingFlow} />
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { getHealth, hasSupabaseEnv, mockSupabaseAuth } from "./helpers.mjs";
+import { corsJsonHeaders, getHealth, hasSupabaseEnv, mockSupabaseAuth } from "./helpers.mjs";
 
 test.describe("auth flow", () => {
   test("login page renders login and signup controls", async ({ page }) => {
@@ -11,14 +11,11 @@ test.describe("auth flow", () => {
     await expect(page.getByRole("button", { name: "注册新账号" })).toBeVisible();
   });
 
-  test("auth errors are visible in the UI", async ({ page }) => {
+  test("auth errors show the Supabase message in the UI", async ({ page }) => {
     await page.route("**/auth/v1/token?grant_type=password", async (route) => {
       await route.fulfill({
         status: 400,
-        headers: {
-          "access-control-allow-origin": "*",
-          "content-type": "application/json",
-        },
+        headers: corsJsonHeaders(),
         body: JSON.stringify({ error_description: "Invalid login credentials" }),
       });
     });
@@ -27,7 +24,40 @@ test.describe("auth flow", () => {
     await page.getByPlaceholder("you@example.com").fill("wrong@example.com");
     await page.getByPlaceholder("输入密码，至少 6 位").fill("wrong-password");
     await page.getByRole("button", { name: "登录" }).click();
-    await expect(page.getByText(/登录失败|Supabase 环境变量/)).toBeVisible();
+    await expect(page.getByText(/Invalid login credentials|Supabase 环境变量/)).toBeVisible();
+  });
+
+  test("signup errors show the Supabase message in the UI", async ({ page }) => {
+    await page.route("**/auth/v1/signup**", async (route) => {
+      if (route.request().method() === "OPTIONS") {
+        await route.fulfill({
+          status: 204,
+          headers: corsJsonHeaders(),
+          body: "",
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 400,
+        headers: corsJsonHeaders(),
+        body: JSON.stringify({ msg: "User already registered" }),
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByTestId("auth-email-input").fill("registered@example.com");
+    await page.getByTestId("auth-password-input").fill("valid-password");
+    await page.getByTestId("auth-signup-button").click();
+    await expect(page.getByText("User already registered")).toBeVisible();
+  });
+
+  test("short passwords show a clear client-side error", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByTestId("auth-email-input").fill("new@example.com");
+    await page.getByTestId("auth-password-input").fill("123");
+    await page.getByTestId("auth-signup-button").click();
+    await expect(page.getByText("密码至少 6 位。")).toBeVisible();
   });
 
   test("anonymous dashboard access redirects to login when Supabase is configured", async ({
