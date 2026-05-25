@@ -160,9 +160,9 @@ export async function mockSupabaseProjectApi(page) {
 export async function signInWithMockSession(page) {
   await mockSupabaseAuth(page);
   await page.goto("/login");
-  await page.getByPlaceholder("you@example.com").fill("e2e@example.com");
-  await page.getByPlaceholder("输入密码，至少 6 位").fill("e2e-password");
-  await page.getByRole("button", { name: "登录" }).click();
+  await page.getByTestId("auth-email-input").fill("e2e@example.com");
+  await page.getByTestId("auth-password-input").fill("e2e-password");
+  await page.getByTestId("auth-submit-button").click();
   await expect(page).toHaveURL(/\/dashboard/);
 }
 

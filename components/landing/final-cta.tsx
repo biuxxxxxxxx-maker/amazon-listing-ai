@@ -55,6 +55,7 @@ export function FinalCta({ isGenerating = false, onGenerate }: FinalCtaProps) {
               <p>3. 查看英文 Listing + 中文解释</p>
             </div>
             <Button
+              data-testid="start-listing-footer-cta"
               variant="warm"
               size="lg"
               className="mt-5 w-full"

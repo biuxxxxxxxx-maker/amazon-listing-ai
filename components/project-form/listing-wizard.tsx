@@ -322,12 +322,20 @@ export function ListingWizard() {
             上一步
           </Button>
           {isLast ? (
-            <Button type="submit" className="w-full sm:w-auto" disabled={isSaving}>
+            <Button
+              key="listing-draft-submit"
+              data-testid="listing-draft-submit"
+              type="submit"
+              className="w-full sm:w-auto"
+              disabled={isSaving}
+            >
               {isSaving ? "保存中..." : "保存 Draft"}
               <Check className="size-4" />
             </Button>
           ) : (
             <Button
+              key="listing-next-step"
+              data-testid="listing-next-step"
               type="button"
               className="w-full sm:w-auto"
               onClick={() => setCurrentStep((step) => Math.min(wizardSteps.length - 1, step + 1))}

@@ -80,6 +80,7 @@ export function Hero({
           </div>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Button
+              data-testid="start-listing-cta"
               size="lg"
               className="w-full sm:w-auto"
               type="button"
@@ -89,7 +90,7 @@ export function Hero({
               {isGenerating ? "生成中..." : "开始生成 Listing"}
               <ArrowRight className="size-4" />
             </Button>
-            <Link href="/dashboard">
+            <Link href="/dashboard" data-testid="mock-workbench-cta">
               <Button variant="secondary" size="lg" className="w-full sm:w-auto">
                 查看 mock 工作台
               </Button>

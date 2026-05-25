@@ -132,11 +132,19 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
       ) : null}
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-ink">邮箱</span>
-        <Input name="email" type="email" placeholder="you@example.com" autoComplete="email" required />
+        <Input
+          data-testid="auth-email-input"
+          name="email"
+          type="email"
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+        />
       </label>
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-ink">密码</span>
         <Input
+          data-testid="auth-password-input"
           name="password"
           type="password"
           placeholder="输入密码，至少 6 位"
@@ -145,7 +153,13 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
           required
         />
       </label>
-      <Button type="submit" size="lg" className="w-full" disabled={Boolean(loadingMode)}>
+      <Button
+        data-testid="auth-submit-button"
+        type="submit"
+        size="lg"
+        className="w-full"
+        disabled={Boolean(loadingMode)}
+      >
         <Mail className="size-4" />
         {loadingMode === initialMode ? (initialMode === "signin" ? "登录中..." : "注册中...") : initialMode === "signin" ? "登录" : "注册新账号"}
       </Button>

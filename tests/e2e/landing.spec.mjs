@@ -18,7 +18,7 @@ test.describe("landing page", () => {
     await expect(page.getByText("Amazon Listing Output")).toBeVisible();
     await expect(page.getByText("Generating")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "开始生成 Listing" }).click();
+    await page.getByTestId("start-listing-cta").click();
     await expect(page).toHaveURL(/\/(login|projects\/new)$/);
     expect(generationRequests).toHaveLength(0);
   });
@@ -36,7 +36,7 @@ test.describe("landing page", () => {
     });
 
     await page.goto("/");
-    await page.getByRole("link", { name: "查看 mock 工作台" }).click();
+    await page.getByTestId("mock-workbench-cta").click();
     await expect(page).toHaveURL(/\/(dashboard|login)$/);
     expect(generationRequests).toHaveLength(0);
   });

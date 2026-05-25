@@ -340,7 +340,12 @@ export default function ResultPage() {
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[31rem]">
             <CopyButton text={copyReadyListing} label="复制英文 Listing" size="md" />
-            <Button variant="secondary" onClick={regenerateListing} disabled={isGenerating}>
+            <Button
+              data-testid="regenerate-listing-button"
+              variant="secondary"
+              onClick={regenerateListing}
+              disabled={isGenerating}
+            >
               <RefreshCw className="size-4" />
               {isGenerating ? "生成中" : "重新生成"}
             </Button>

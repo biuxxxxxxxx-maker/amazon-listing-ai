@@ -19,6 +19,8 @@ const eslintConfig = [
       ".wrangler/**",
       "next-env.d.ts",
       "node_modules/**",
+      "playwright-report/**",
+      "test-results/**",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),

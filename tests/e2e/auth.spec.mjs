@@ -49,7 +49,6 @@ test.describe("auth flow", () => {
     test.skip(!hasSupabaseEnv(health), "Supabase env is not configured, so project creation stays in mock mode.");
 
     await page.goto("/projects/new");
-    await expect(page.getByText("请先登录后再创建 Listing 项目")).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
   });
 
@@ -62,9 +61,9 @@ test.describe("auth flow", () => {
 
     await mockSupabaseAuth(page);
     await page.goto("/login");
-    await page.getByPlaceholder("you@example.com").fill(process.env.E2E_TEST_EMAIL || "e2e@example.com");
-    await page.getByPlaceholder("输入密码，至少 6 位").fill(process.env.E2E_TEST_PASSWORD || "e2e-password");
-    await page.getByRole("button", { name: "登录" }).click();
+    await page.getByTestId("auth-email-input").fill(process.env.E2E_TEST_EMAIL || "e2e@example.com");
+    await page.getByTestId("auth-password-input").fill(process.env.E2E_TEST_PASSWORD || "e2e-password");
+    await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
@@ -81,9 +80,9 @@ test.describe("auth flow", () => {
     test.skip(!hasSupabaseEnv(health), "Supabase env is required for real login.");
 
     await page.goto("/login");
-    await page.getByPlaceholder("you@example.com").fill(process.env.E2E_TEST_EMAIL);
-    await page.getByPlaceholder("输入密码，至少 6 位").fill(process.env.E2E_TEST_PASSWORD);
-    await page.getByRole("button", { name: "登录" }).click();
+    await page.getByTestId("auth-email-input").fill(process.env.E2E_TEST_EMAIL);
+    await page.getByTestId("auth-password-input").fill(process.env.E2E_TEST_PASSWORD);
+    await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
   });
 });

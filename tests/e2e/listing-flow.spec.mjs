@@ -37,23 +37,34 @@ test.describe("listing creation and generation flow", () => {
     await signInWithMockSession(page);
     await page.goto("/projects/new");
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
+    await expect(page.getByText("Step 1 / 4")).toBeVisible();
 
     await page.getByLabel("产品中文名称").fill("E2E 收纳篮");
     await page.getByLabel("产品类目").fill("Home & Kitchen");
     await expect(generationRequests).toHaveLength(0);
 
-    await page.getByRole("button", { name: "下一步" }).click();
+    await page.getByTestId("listing-next-step").click();
+    await expect(page.getByText("Step 2 / 4")).toBeVisible();
     await page.getByLabel("材质").fill("PP");
-    await page.getByRole("button", { name: "下一步" }).click();
+    await page.getByTestId("listing-next-step").click();
+    await expect(page.getByText("Step 3 / 4")).toBeVisible();
     await page.getByLabel("自己想突出的差异化").fill("折叠后更薄，适合宿舍和车载场景。");
-    await page.getByRole("button", { name: "下一步" }).click();
+    await page.getByTestId("listing-next-step").click();
+    await expect(page.getByText("Step 4 / 4")).toBeVisible();
     await expect(generationRequests).toHaveLength(0);
 
-    await page.getByRole("button", { name: "保存 Draft" }).click();
+    const draftSubmit = page.getByTestId("listing-draft-submit");
+    await expect(draftSubmit).toBeVisible();
+    await draftSubmit.click();
     await expect(page).toHaveURL(/\/projects\/e2e-project\/result/);
+    await expect(page.getByRole("heading", { name: "AI Listing 交付结果" })).toBeVisible();
+    await expect(page.getByText("当前生成使用真实项目资料")).toBeVisible();
     await expect(generationRequests).toHaveLength(0);
 
-    await page.getByRole("button", { name: "重新生成" }).click();
+    const generationResponse = page.waitForResponse("**/api/generate-listing");
+    await expect(page.getByTestId("regenerate-listing-button")).toBeEnabled();
+    await page.getByTestId("regenerate-listing-button").click();
+    await generationResponse;
     await expect(page.getByText(/已生成结果|正在后台保存|DeepSeek 生成结果已保存/)).toBeVisible();
     expect(generationRequests).toHaveLength(1);
     expect(generationRequests[0].body.projectId).toBe("e2e-project");
@@ -77,8 +88,8 @@ test.describe("listing creation and generation flow", () => {
 
     await signInWithMockSession(page);
     await page.goto("/projects/e2e-project/result");
-    await page.getByRole("button", { name: "重新生成" }).click();
+    await page.getByTestId("regenerate-listing-button").click();
     await expect(page.getByText("生成失败：E2E mocked generation failure")).toBeVisible();
-    await expect(page.getByRole("button", { name: "重新生成" })).toBeEnabled();
+    await expect(page.getByTestId("regenerate-listing-button")).toBeEnabled();
   });
 });
