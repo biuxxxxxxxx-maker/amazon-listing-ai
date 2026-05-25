@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -120,6 +120,9 @@ const generationModules: Array<{
 ];
 
 export function ListingWizard() {
+  const supabaseReady = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  );
   const [currentStep, setCurrentStep] = useState(0);
   const [draft, setDraft] = useState(draftDefaults);
   const [needsChineseExplanation, setNeedsChineseExplanation] = useState(true);
@@ -128,6 +131,44 @@ export function ListingWizard() {
   const [isSaving, setIsSaving] = useState(false);
   const isLast = currentStep === wizardSteps.length - 1;
   const guide = stepGuides[currentStep];
+
+  useEffect(() => {
+    if (!supabaseReady) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function requireSession() {
+      try {
+        const supabase = getBrowserSupabase();
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (!isMounted || sessionData.session) {
+          return;
+        }
+
+        setSaveError("请先登录后再创建 Listing 项目。正在跳转到登录页...");
+        window.location.href = "/login";
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSaveError(
+          error instanceof Error
+            ? `登录状态检查失败：${error.message}`
+            : "登录状态检查失败，请先回到登录页。",
+        );
+      }
+    }
+
+    requireSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabaseReady]);
 
   function updateField(field: DraftField, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));

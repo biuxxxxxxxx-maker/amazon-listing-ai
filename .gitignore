@@ -16,3 +16,5 @@ dist
 cloudflare-env.d.ts
 *.tsbuildinfo
 *.log
+playwright-report
+test-results

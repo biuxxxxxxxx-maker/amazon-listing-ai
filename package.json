@@ -8,7 +8,9 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "check": "npm run lint && npm run typecheck && npm run build && npm run test:e2e",
     "preview": "opennextjs-cloudflare build && node scripts/run-cloudflare.mjs wrangler dev",
     "deploy": "opennextjs-cloudflare build && node scripts/run-cloudflare.mjs wrangler deploy",
     "cf-typegen": "node scripts/run-cloudflare.mjs wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
@@ -26,6 +28,7 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "autoprefixer": "10.4.20",
     "eslint": "9.17.0",
     "eslint-config-next": "15.5.18",
