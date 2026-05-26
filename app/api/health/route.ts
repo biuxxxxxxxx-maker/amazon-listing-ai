@@ -23,7 +23,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    version: "runtime-env-2026-05-24-deepseek-01",
+    version: "supabase-auth-diagnostics-2026-05-26-01",
     ai: {
       provider,
       hasKey: Boolean(deepSeekKey),

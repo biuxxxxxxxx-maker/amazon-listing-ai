@@ -27,9 +27,6 @@ async function requestSupabaseAuth(mode: AuthMode, email: string, password: stri
       : await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
-          },
         });
 
   if (result.error) {

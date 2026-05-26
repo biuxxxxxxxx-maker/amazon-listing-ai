@@ -52,6 +52,42 @@ test.describe("auth flow", () => {
     await expect(page.getByText("User already registered")).toBeVisible();
   });
 
+  test("signup does not send a redirect_to query parameter", async ({ page }) => {
+    const signupUrls = [];
+
+    await page.route("**/auth/v1/signup**", async (route) => {
+      signupUrls.push(route.request().url());
+
+      if (route.request().method() === "OPTIONS") {
+        await route.fulfill({
+          status: 204,
+          headers: corsJsonHeaders(),
+          body: "",
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        headers: corsJsonHeaders(),
+        body: JSON.stringify({
+          user: {
+            id: "00000000-0000-4000-8000-000000000002",
+            email: "needs-confirmation@example.com",
+          },
+          session: null,
+        }),
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByTestId("auth-email-input").fill("needs-confirmation@example.com");
+    await page.getByTestId("auth-password-input").fill("valid-password");
+    await page.getByTestId("auth-signup-button").click();
+    await expect(page.getByText("注册成功，请检查邮箱完成验证后再登录。")).toBeVisible();
+    expect(signupUrls.some((url) => new URL(url).searchParams.has("redirect_to"))).toBe(false);
+  });
+
   test("short passwords show a clear client-side error", async ({ page }) => {
     await page.goto("/login");
     await page.getByTestId("auth-email-input").fill("new@example.com");
