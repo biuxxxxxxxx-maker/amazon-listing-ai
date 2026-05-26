@@ -174,6 +174,7 @@ export type ListingStrategy = {
 
 export type QualityScore = {
   overall: number;
+  level: "basic" | "good" | "strong";
   dimensions: {
     inputCompleteness: number;
     keywordRelevance: number;
@@ -187,11 +188,26 @@ export type QualityScore = {
 export type FinalListing = {
   title: ListingLanguageField;
   bulletPoints: [
-    ListingLanguageField,
-    ListingLanguageField,
-    ListingLanguageField,
-    ListingLanguageField,
-    ListingLanguageField,
+    ListingLanguageField & {
+      sourceBasis: "confirmed_fact" | "safe_inference" | "competitor_inspired";
+      evidenceFields: string[];
+    },
+    ListingLanguageField & {
+      sourceBasis: "confirmed_fact" | "safe_inference" | "competitor_inspired";
+      evidenceFields: string[];
+    },
+    ListingLanguageField & {
+      sourceBasis: "confirmed_fact" | "safe_inference" | "competitor_inspired";
+      evidenceFields: string[];
+    },
+    ListingLanguageField & {
+      sourceBasis: "confirmed_fact" | "safe_inference" | "competitor_inspired";
+      evidenceFields: string[];
+    },
+    ListingLanguageField & {
+      sourceBasis: "confirmed_fact" | "safe_inference" | "competitor_inspired";
+      evidenceFields: string[];
+    },
   ];
   description: ListingLanguageField;
   searchTerms: ListingLanguageField;
@@ -302,6 +318,7 @@ export type GenerationInputSnapshot = {
 `QualityScore` 用于告诉用户资料质量和结果可信度，不是 Amazon 官方评分。
 
 - `overall`：0 到 100。
+- `level`：`"basic"`、`"good"` 或 `"strong"`，用于页面直观展示资料质量等级。
 - `dimensions.inputCompleteness`：资料完整度。
 - `dimensions.keywordRelevance`：关键词相关性。
 - `dimensions.complianceSafety`：合规安全度。
@@ -316,6 +333,8 @@ export type GenerationInputSnapshot = {
 - `title.english`：英文标题。
 - `title.chineseExplanation`：中文解释，不复制到 Amazon。
 - `bulletPoints`：必须是 5 条 tuple，不能少于或多于 5 条。
+- `bulletPoints[].sourceBasis`：说明该 bullet 来自确认事实、保守推断或竞品启发。
+- `bulletPoints[].evidenceFields`：追溯该 bullet 使用的依据字段，例如 `material`、`category`、`competitorInsights.buyerPainPoints`。
 - `description.english`：英文描述。
 - `description.chineseExplanation`：中文解释。
 - `searchTerms.english`：后台 Search Terms 英文。
@@ -628,7 +647,8 @@ Search Terms:
 2. `source` 必须为 `"deepseek"`。
 3. `model` 必须非空，不能是 `"mock-local"`。
 4. `qualityScore.overall` 必须是 0 到 100 的数字。
-5. 必须包含 `productBrief`、`competitorInsights`、`listingStrategy`、`finalListing`、`complianceNotes`、`missingInfo`、`assumptions`、`improvementSuggestions`、`analysis`。
+5. `qualityScore.level` 必须是 `"basic"`、`"good"` 或 `"strong"`。
+6. 必须包含 `productBrief`、`competitorInsights`、`listingStrategy`、`finalListing`、`complianceNotes`、`missingInfo`、`assumptions`、`improvementSuggestions`、`analysis`。
 
 ### FinalListing 校验
 
@@ -637,11 +657,13 @@ Search Terms:
 3. `bulletPoints.length === 5`。
 4. 每条 bullet 的 `english` 非空。
 5. 每条 bullet 的 `chineseExplanation` 非空。
-6. `description.english` 非空。
-7. `description.chineseExplanation` 非空。
-8. `searchTerms.english` 非空。
-9. `searchTerms.chineseExplanation` 非空。
-10. 英文字段中不应包含大段中文字符。
+6. 每条 bullet 的 `sourceBasis` 必须是 `"confirmed_fact"`、`"safe_inference"` 或 `"competitor_inspired"`。
+7. 每条 bullet 的 `evidenceFields` 必须是数组。
+8. `description.english` 非空。
+9. `description.chineseExplanation` 非空。
+10. `searchTerms.english` 非空。
+11. `searchTerms.chineseExplanation` 非空。
+12. 英文字段中不应包含大段中文字符。
 
 ### 合规校验
 
