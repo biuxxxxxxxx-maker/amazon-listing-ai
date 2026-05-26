@@ -8,6 +8,7 @@ type ResultBlockProps = {
   eyebrow?: string;
   description?: string;
   copyText?: string;
+  copyLabel?: string;
   children: ReactNode;
 };
 
@@ -17,6 +18,7 @@ export function ResultBlock({
   eyebrow,
   description,
   copyText,
+  copyLabel,
   children,
 }: ResultBlockProps) {
   return (
@@ -34,7 +36,7 @@ export function ResultBlock({
           ) : null}
         </div>
         {copyText ? (
-          <CopyButton text={copyText} label="复制模块" className="w-full sm:w-auto" />
+          <CopyButton text={copyText} label={copyLabel || "复制模块"} className="w-full sm:w-auto" />
         ) : null}
       </div>
       <div className="px-4 py-4 sm:px-6 sm:py-5">{children}</div>

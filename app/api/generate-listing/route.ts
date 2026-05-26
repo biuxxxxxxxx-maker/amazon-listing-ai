@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateAmazonListing, readAIProvider } from "@/lib/ai-listing";
+import { generateAmazonListing, isGenerationMockEnabled, readAIProvider } from "@/lib/ai-listing";
 import { readServerEnv } from "@/lib/cloudflare-env";
 import { shouldUseSupabaseGenerationAuth } from "@/lib/generation-auth";
 import {
@@ -70,12 +70,13 @@ export async function POST(request: Request) {
       projectId: projectId || "",
       supabaseReady: true,
     });
+    const allowMockFallback = await isGenerationMockEnabled();
 
     if (!requiresProjectAuth) {
       const generation = await generateAmazonListing({
         projectId,
         projectData,
-        allowMockFallback: true,
+        allowMockFallback,
       });
 
       return NextResponse.json(generation);
@@ -133,13 +134,13 @@ export async function POST(request: Request) {
       productName: projectLogFields.productName,
       category: projectLogFields.category,
       marketplace: projectLogFields.marketplace,
-      mock: !requiresProjectAuth,
+      mock: allowMockFallback,
     });
 
     const generation = await generateAmazonListing({
       projectId,
       projectData,
-      allowMockFallback: !requiresProjectAuth,
+      allowMockFallback,
     });
 
     return NextResponse.json(generation);

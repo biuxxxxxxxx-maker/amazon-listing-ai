@@ -35,7 +35,7 @@ export default async function NewProjectPage({
         </nav>
         <PageHeader
           title="创建 Amazon Listing 项目"
-          description="按步骤填写中文资料、竞品信息和生成偏好。第一阶段使用 mock 数据展示完整体验。"
+          description="按步骤填写中文资料、竞品信息和生成偏好。保存 Draft 后进入结果页，再调用 DeepSeek 生成正式 Listing。"
         />
         {error ? (
           <div className="mt-6 rounded-lg border border-orange-200 bg-amberSoft p-4 text-sm leading-6 text-[#8a5a1e]">

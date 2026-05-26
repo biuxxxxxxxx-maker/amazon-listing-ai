@@ -5,6 +5,7 @@ type WorkUpCloudflareEnv = {
   DEEPSEEK_API_KEY?: string;
   DEEPSEEK_BASE_URL?: string;
   DEEPSEEK_MODEL?: string;
+  ENABLE_GENERATION_MOCK?: string;
 };
 
 export async function getCloudflareEnv(): Promise<WorkUpCloudflareEnv> {

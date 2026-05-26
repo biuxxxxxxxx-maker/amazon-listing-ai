@@ -12,22 +12,21 @@ import { Card } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { ResultBlock } from "@/components/ui/result-block";
 import {
-  mockGenerationResult,
   normalizeGenerationResult,
   type GenerationResult,
 } from "@/lib/mock-generation-result";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 
 const resultNavItems = [
-  ["分析", "analysis"],
-  ["竞品", "competitors"],
-  ["痛点", "reviews"],
-  ["差异化", "differentiation"],
-  ["翻译", "translation"],
   ["标题", "title"],
   ["五点", "bullets"],
   ["描述", "description"],
   ["关键词", "search-terms"],
+  ["风险", "compliance"],
+  ["分析", "analysis"],
+  ["竞品", "competitors"],
+  ["痛点", "reviews"],
+  ["差异化", "differentiation"],
   ["FAQ", "faq"],
   ["图片", "images"],
 ];
@@ -35,17 +34,15 @@ const resultNavItems = [
 const qualityChecks = [
   "英文内容避免逐字翻译",
   "未使用竞品品牌词",
-  "缺少承重数据时不夸大",
+  "避免 best、guaranteed、medical、heavy-duty 等高风险词",
 ];
 
-const nativeTranslation = {
-  title: "供应商中文资料改写",
-  english:
-    "A collapsible storage basket designed for everyday organization in small spaces, closets, laundry rooms, and car trunks.",
-  chinese: "一款适合小空间、衣柜、洗衣房和汽车后备箱日常整理使用的可折叠收纳篮。",
-  note:
-    "翻译说明：英文没有逐字翻译“家庭多场景使用”，而是改成 Amazon 买家更容易搜索和理解的具体使用场景。",
-};
+const complianceNotes = [
+  "不要写 best、#1、guaranteed 这类无法证明的绝对化承诺。",
+  "没有测试数据时，不要写 heavy-duty、extra strong 或具体承重。",
+  "非医疗产品不要写 medical、therapeutic、cure、pain relief 等医疗暗示。",
+  "不要堆砌竞品品牌词或可能侵权的商标词。",
+];
 
 type ProjectData = {
   product_name_cn?: string | null;
@@ -58,6 +55,37 @@ type ProjectData = {
   status?: "Draft" | "Generated" | null;
 };
 
+function createEmptyResult(project?: ProjectData | null): GenerationResult {
+  return {
+    source: "pending",
+    product: {
+      nameCn: project?.product_name_cn || "Amazon Listing 项目",
+      marketplace: project?.marketplace || "US",
+      category: project?.category || "Uncategorized",
+    },
+    analysis: {
+      coreSellingPoints: [],
+      beginnerExplanation: "",
+    },
+    title: {
+      english: "",
+      chinese: "",
+    },
+    bullets: [],
+    description: {
+      english: "",
+      chinese: "",
+    },
+    searchTerms: {
+      english: "",
+      chinese: "",
+    },
+    faq: [],
+    imageSuggestions: [],
+    copyReadyListing: "",
+  };
+}
+
 export default function ResultPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
@@ -68,9 +96,10 @@ export default function ResultPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [savedAt, setSavedAt] = useState("");
-  const [displayResult, setDisplayResult] = useState<GenerationResult>(mockGenerationResult);
+  const [displayResult, setDisplayResult] = useState<GenerationResult>(() => createEmptyResult());
   const [displayModel, setDisplayModel] = useState("mock-local");
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
+  const hasDeepSeekResult = displayResult.source === "deepseek" && displayModel !== "mock-local";
 
   useEffect(() => {
     if (!supabaseReady || projectId === "demo") {
@@ -97,17 +126,9 @@ export default function ResultPage() {
         }
 
         if (project) {
-          setProjectData(project as ProjectData);
-          setDisplayResult(
-            normalizeGenerationResult({
-              ...mockGenerationResult,
-              product: {
-                nameCn: project.product_name_cn,
-                marketplace: project.marketplace,
-                category: project.category,
-              },
-            }),
-          );
+          const typedProject = project as ProjectData;
+          setProjectData(typedProject);
+          setDisplayResult(createEmptyResult(typedProject));
         }
 
         const { data, error } = await supabase
@@ -123,12 +144,18 @@ export default function ResultPage() {
         }
 
         if (data?.created_at) {
-          if (data.result_json) {
-            setDisplayResult(normalizeGenerationResult(data.result_json));
-            setDisplayModel(data.model || "mock-local");
+          const normalizedSavedResult = normalizeGenerationResult(data.result_json);
+
+          if (data.result_json && normalizedSavedResult.source === "deepseek" && data.model !== "mock-local") {
+            setDisplayResult(normalizedSavedResult);
+            setDisplayModel(data.model || "deepseek-chat");
+            setSavedAt(String(data.created_at).slice(0, 19).replace("T", " "));
+            setStatusMessage("已读取到 Supabase 中保存过的 DeepSeek 生成结果。");
+          } else {
+            setSavedAt("");
+            setDisplayModel("mock-local");
+            setStatusMessage("已忽略历史非 DeepSeek 结果。请点击重新生成，获取 DeepSeek 正式结果。");
           }
-          setSavedAt(String(data.created_at).slice(0, 19).replace("T", " "));
-          setStatusMessage("已读取到 Supabase 中保存过的生成结果。");
         }
       } catch (error) {
         setStatusMessage(
@@ -143,12 +170,12 @@ export default function ResultPage() {
   }, [projectId, supabaseReady]);
 
   async function saveGeneratedResult(
-    resultJson: GenerationResult = mockGenerationResult,
+    resultJson: GenerationResult,
     model = "mock-local",
     options: { clearStatus?: boolean } = {},
   ) {
     if (!supabaseReady) {
-      setStatusMessage("Supabase 环境变量未配置，当前只能查看 mock 结果。");
+      setStatusMessage("Supabase 环境变量未配置，无法保存结果。");
       return;
     }
 
@@ -201,9 +228,7 @@ export default function ResultPage() {
       setDisplayModel(model);
       setSavedAt(now);
       setStatusMessage(
-        model === "mock-local"
-          ? "Mock 生成结果已保存到 Supabase。"
-          : "DeepSeek 生成结果已保存到 Supabase。",
+        "DeepSeek 生成结果已保存到 Supabase。",
       );
     } catch (error) {
       setStatusMessage(
@@ -237,14 +262,7 @@ export default function ResultPage() {
         headers,
         body: JSON.stringify({
           projectId,
-          projectData:
-            projectId === "demo"
-              ? {
-                  product_name_cn: "便携式折叠收纳篮",
-                  marketplace: "US",
-                  category: "Home & Kitchen",
-                }
-              : projectData,
+          projectData,
         }),
       });
       const data = await response.json();
@@ -259,7 +277,7 @@ export default function ResultPage() {
       }
 
       if (projectId !== "demo" && data.source !== "deepseek") {
-        throw new Error(data.fallbackReason || "生成接口返回了 mock 结果，已停止保存。请检查 DeepSeek 配置。");
+        throw new Error(data.fallbackReason || "生成接口返回了非 DeepSeek 正式结果，已停止保存。请检查 DeepSeek 配置。");
       }
 
       const normalizedResult = normalizeGenerationResult(data.result, projectData || undefined);
@@ -289,7 +307,7 @@ export default function ResultPage() {
         setStatusMessage(
           data.source === "deepseek"
             ? "已生成结果，正在后台保存到 Supabase。"
-            : data.fallbackReason || "已返回 mock 生成结果，正在后台保存到 Supabase。",
+            : data.fallbackReason || "生成接口返回了非正式结果，已停止保存。请检查 DeepSeek 配置。",
         );
         void saveGeneratedResult(generatedResult, data.model || "mock-local", {
           clearStatus: false,
@@ -300,12 +318,12 @@ export default function ResultPage() {
         setStatusMessage(
           data.source === "deepseek"
             ? "已调用 DeepSeek 生成结果。当前是 demo 项目，所以没有写入数据库。"
-            : data.fallbackReason || "当前未配置 DEEPSEEK_API_KEY，已返回 mock 生成结果。",
+            : data.fallbackReason || "当前未生成 DeepSeek 正式结果。",
         );
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setStatusMessage("生成失败：DeepSeek 响应超时，未保存 mock 结果。请稍后重试。");
+        setStatusMessage("生成失败：DeepSeek 响应超时，未保存任何结果。请稍后重试。");
         return;
       }
 
@@ -320,38 +338,59 @@ export default function ResultPage() {
     }
   }
 
-  const displayBullets =
-    displayResult.bullets?.length === 5 ? displayResult.bullets : mockGenerationResult.bullets;
-  const displayFaq = displayResult.faq?.length ? displayResult.faq : mockGenerationResult.faq;
-  const displayImages = displayResult.imageSuggestions?.length
-    ? displayResult.imageSuggestions
-    : mockGenerationResult.imageSuggestions;
-  const copyReadyListing = displayResult.copyReadyListing || mockGenerationResult.copyReadyListing;
-  const titleCopyText = formatBilingualCopy({
-    title: "Amazon 标题",
-    english: displayResult.title.english,
-    chinese: displayResult.title.chinese,
-    note: "标题结构：核心关键词 / 产品形态 / 使用场景 / 小空间需求 / 家居风格。",
-  });
-  const translationCopyText = formatBilingualCopy(nativeTranslation);
-  const descriptionCopyText = formatBilingualCopy({
-    title: "Product Description",
-    english: displayResult.description.english,
-    chinese: displayResult.description.chinese,
-    note: "小白提示：Product Description 可以比 Bullet 更自然，但仍然要避免夸大承诺。",
-  });
-  const searchTermsCopyText = formatBilingualCopy({
-    title: "Backend Search Terms",
-    english: displayResult.searchTerms.english,
-    chinese: displayResult.searchTerms.chinese,
-    note: "小白提示：这些词适合放在 Amazon 后台 Search Terms。不要堆砌竞品品牌词，也不要使用可能侵权的商标词。",
-  });
+  const displayBullets = displayResult.bullets || [];
+  const displayFaq = displayResult.faq || [];
+  const displayImages = displayResult.imageSuggestions || [];
+  const copyReadyListing = displayResult.copyReadyListing || "";
+  const titleCopyText = displayResult.title.english;
+  const bulletCopyText = displayBullets.map((bullet) => bullet.english).filter(Boolean).join("\n");
+  const descriptionCopyText = displayResult.description.english;
+  const searchTermsCopyText = displayResult.searchTerms.english;
   const currentDeliveryStats = [
     ["11", "结果模块"],
     [String(displayBullets.length), "Bullet Points"],
     [String(displayImages.length), "图片建议"],
     ["100%", "中文参照"],
   ];
+  const productName = projectData?.product_name_cn || displayResult.product?.nameCn || "当前产品";
+  const formData = projectData?.form_data || {};
+  const analysisItems = [
+    ["选品可行性", `围绕“${productName}”的真实资料判断卖点、使用场景和买家需求，不使用默认 demo 产品。`],
+    ["目标用户", String(projectData?.target_customer || formData.target_user || "根据用户填写的目标用户和使用场景生成。")],
+    ["使用场景", String(formData.usage_scenarios || "根据用户填写的使用场景生成，未填写时不编造具体场景。")],
+    ["风险提醒", "不要夸大承重、功效、材质、认证或医疗属性；没有证据的数据不要写进 Listing。"],
+  ];
+  const competitorItems = [
+    [
+      "常见竞品表达",
+      "Use the competitor titles and selling points provided by the user to identify reusable keyword patterns.",
+      "基于用户填写的竞品标题和卖点，提炼可借鉴的关键词表达。",
+    ],
+    [
+      "可借鉴点",
+      "Keep wording practical and specific. Buyers respond better to clear use cases than broad lifestyle claims.",
+      "表达要具体、实用，优先说明真实场景，而不是空泛营销。",
+    ],
+    [
+      "可突破点",
+      "Highlight differences that can be supported by the product materials, images, or specifications.",
+      "差异化必须能被产品、图片或参数证明，不要编造卖点。",
+    ],
+  ];
+  const reviewPainItems = [
+    ["资料完整度", "评论痛点会根据用户填写的差评或顾虑生成；未填写时不套用 demo 痛点。"],
+    ["买家担心", "把真实顾虑反向写成清晰 Bullet，但不要承诺无法证明的效果。"],
+    ["售后风险", "如果资料缺少尺寸、材质或限制，结果页会提醒补充，而不是自动填充。"],
+  ];
+  const differentiationItems = String(formData.differentiation || "")
+    .split(/[，,、\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const safeDifferentiationItems =
+    differentiationItems.length > 0
+      ? differentiationItems
+      : ["核心功能", "使用场景", "目标用户", "风险边界"];
 
   return (
     <main className="min-h-screen px-5 pb-28 pt-6 sm:px-8 sm:pb-6 lg:px-10">
@@ -382,7 +421,7 @@ export default function ResultPage() {
               <RefreshCw className="size-4" />
               {isGenerating ? "生成中" : "重新生成"}
             </Button>
-            <Button variant="warm" onClick={saveCurrentResult} disabled={isSaving}>
+            <Button variant="warm" onClick={saveCurrentResult} disabled={isSaving || !hasDeepSeekResult}>
               <Save className="size-4" />
               {isSaving ? "保存中" : "保存结果"}
             </Button>
@@ -412,15 +451,15 @@ export default function ResultPage() {
             <div className="p-5 sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <Badge tone={savedAt ? "green" : "warm"}>
-                    {savedAt ? "Saved Result" : "Mock Generated"}
+                  <Badge tone={hasDeepSeekResult ? "green" : "warm"}>
+                    {hasDeepSeekResult ? "DeepSeek Result" : "Not Generated"}
                   </Badge>
                   <h2 className="mt-4 text-2xl font-semibold text-ink">
                     {displayResult.product?.nameCn || "Amazon Listing 项目"}
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-neutral-600">
                     Amazon {displayResult.product?.marketplace || "US"} /{" "}
-                    {displayResult.product?.category || "Home & Kitchen"} / 双语解释
+                    {displayResult.product?.category || "Uncategorized"} / 双语解释
                   </p>
                 </div>
                 <div className="flex items-center gap-2 rounded-full border border-line bg-paper px-3 py-1.5 text-sm font-medium text-neutral-600">
@@ -491,162 +530,18 @@ export default function ResultPage() {
 
           <div className="grid gap-5">
           <ResultBlock
-            id="analysis"
-            title="选品与上新分析"
-            eyebrow="Product Analysis"
-            description="先判断产品适合卖给谁、解决什么问题，以及哪些表述需要谨慎。"
-          >
-            <div className="grid overflow-hidden rounded-lg border border-line bg-white md:grid-cols-2">
-              {[
-                ["选品可行性", "适合小户型、宿舍和车载收纳场景，需求清晰，价格带适合新手测试。"],
-                ["目标用户", "空间有限、希望快速整理物品的家庭用户、学生、车主和租房人群。"],
-                ["使用场景", "洗衣房、衣柜、厨房储物、车后备箱、房车和儿童房。"],
-                ["风险提醒", "不要夸大承重能力；如果没有测试数据，不要写 heavy-duty 或 extreme load。"],
-              ].map(([title, desc], index) => (
-                <div
-                  key={title}
-                  className="border-b border-line px-4 py-4 last:border-b-0 md:border-r md:[&:nth-child(2n)]:border-r-0 md:[&:nth-last-child(-n+2)]:border-b-0 sm:px-5"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">
-                    Insight {String(index + 1).padStart(2, "0")}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">{desc}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 rounded-lg border border-orange-200 bg-amberSoft p-4">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 size-4 shrink-0 text-[#8a5a1e]" />
-                <div>
-                  <p className="text-sm font-semibold text-[#8a5a1e]">需要补充的信息</p>
-                  <p className="mt-2 text-sm leading-6 text-[#8a5a1e]">
-                    建议补充准确展开尺寸、折叠后厚度和真实承重范围。没有数据时，Listing 不会写
-                    heavy-duty、extra strong 这类容易夸大的词。
-                  </p>
-                </div>
-              </div>
-            </div>
-            <SoftNote label="小白解释">
-              这个分析帮你先判断“产品应该卖给谁、解决什么问题、哪些话不能乱写”，避免直接生成一段看似漂亮但不准确的 Listing。
-            </SoftNote>
-          </ResultBlock>
-
-          <ResultBlock
-            id="competitors"
-            title="竞品分析"
-            eyebrow="Competitor Analysis"
-            description="把竞品表达拆开看，找到可以借鉴和可以避开的地方。"
-          >
-            <div className="overflow-hidden rounded-lg border border-line bg-white">
-              {[
-                [
-                  "常见竞品表达",
-                  "Most competing listings focus on foldable storage, easy carrying, laundry organization, and multi-room use.",
-                  "多数竞品会强调可折叠收纳、方便搬运、洗衣整理和多房间使用。",
-                ],
-                [
-                  "可借鉴点",
-                  "Keep the wording practical and specific. Buyers respond better to clear use cases than broad lifestyle claims.",
-                  "可以借鉴具体场景表达。比起空泛的生活方式文案，买家更容易理解明确用途。",
-                ],
-                [
-                  "可突破点",
-                  "Position the product around small-space organization and quick access instead of only saying it saves space.",
-                  "不要只说节省空间，可以进一步强调小空间整理和快速拿取。",
-                ],
-              ].map(([title, english, chinese]) => (
-                <article key={title} className="border-b border-line px-4 py-5 last:border-b-0 sm:px-5">
-                  <p className="text-sm font-semibold text-ink">{title}</p>
-                  <p className="mt-3 text-base font-medium leading-7 text-ink">{english}</p>
-                  <div className="mt-3 rounded-lg bg-neutral-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-neutral-400">中文参照</p>
-                    <p className="mt-1 text-sm leading-6 text-neutral-600">{chinese}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </ResultBlock>
-
-          <ResultBlock
-            id="reviews"
-            title="评论痛点分析"
-            eyebrow="Review Pain Points"
-            description="从评论里提炼买家担心什么，再反向写进 Listing。"
-          >
-            <div className="grid overflow-hidden rounded-lg border border-line bg-white md:grid-cols-3">
-              {[
-                ["站立不稳", "Listing 里要避免过度承诺，可强调 reinforced rim helps keep shape。"],
-                ["占空间", "突出 folds flat when not in use，让用户理解不用时怎么收纳。"],
-                ["搬运费力", "把双侧提手作为 Bullet 核心卖点，不只放在参数里。"],
-              ].map(([title, desc], index) => (
-                <div
-                  key={title}
-                  className="border-b border-line px-4 py-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0 sm:px-5"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
-                    Pain {String(index + 1).padStart(2, "0")}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
-                  <p className="mt-2 text-sm leading-6 text-neutral-600">{desc}</p>
-                </div>
-              ))}
-            </div>
-          </ResultBlock>
-
-          <ResultBlock
-            id="differentiation"
-            title="差异化卖点提炼"
-            eyebrow="Differentiation"
-            description="把普通功能整理成更明确的购买理由。"
-          >
-            <div className="overflow-hidden rounded-lg border border-line bg-white">
-              {["折叠后更薄", "开放式快速拿取", "中性色家居外观", "多场景搬运"].map((item, index) => (
-                <div
-                  key={item}
-                  className="grid gap-3 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:px-5"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-amberSoft text-xs font-semibold text-[#8a5a1e]">
-                      {index + 1}
-                    </span>
-                    <p className="text-sm font-semibold text-ink">{item}</p>
-                  </div>
-                  <p className="text-sm leading-6 text-neutral-600">
-                    适合放进标题或 Bullet，但需要结合真实尺寸和材质信息，不要编造数据。
-                  </p>
-                </div>
-              ))}
-            </div>
-          </ResultBlock>
-
-          <ResultBlock
-            id="translation"
-            title="地道英文翻译"
-            eyebrow="Native Translation"
-            description="把中文供应商资料改写成更自然的 Amazon 英文表达。"
-            copyText={translationCopyText}
-          >
-            <BilingualPanel
-              title={nativeTranslation.title}
-              english={nativeTranslation.english}
-              chinese={nativeTranslation.chinese}
-              note={nativeTranslation.note}
-            />
-          </ResultBlock>
-
-          <ResultBlock
             id="title"
-            title="Amazon 标题"
+            title="Amazon Title"
             eyebrow="Title"
-            description="标题同时服务买家理解和 Amazon 搜索，避免空泛营销话术。"
+            description="英文标题优先展示，可直接复制到 Amazon 后台。"
             copyText={titleCopyText}
+            copyLabel="Copy Title"
           >
             <BilingualPanel
               title="英文标题"
               english={displayResult.title.english}
               chinese={displayResult.title.chinese}
-              note="标题结构：核心关键词 / 产品形态 / 使用场景 / 小空间需求 / 家居风格。小白提示：标题重点不是写得华丽，而是让买家和 Amazon 都能快速识别产品。"
+              note="标题结构应围绕核心关键词、产品形态、真实使用场景和明确买家需求。"
             />
           </ResultBlock>
 
@@ -654,12 +549,14 @@ export default function ResultPage() {
             id="bullets"
             title="Bullet Points"
             eyebrow="5 Key Bullets"
-            description="五点描述逐条说明卖点、中文含义和对应痛点。"
+            description="5 条英文 Bullet Points 优先用于 Amazon Listing，中文只作理解参考。"
+            copyText={bulletCopyText}
+            copyLabel="Copy Bullet Points"
           >
             <div className="overflow-hidden rounded-lg border border-line bg-white">
               {displayBullets.map((bullet, index) => (
                 <article
-                  key={bullet.english}
+                  key={`${bullet.english}-${index}`}
                   className="border-b border-line px-4 py-5 last:border-b-0 sm:px-5 sm:py-6"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -700,30 +597,158 @@ export default function ResultPage() {
             id="description"
             title="Product Description"
             eyebrow="Description"
-            description="适合放进后台的商品描述版本，英文自然但不夸张。"
+            description="可放进后台的英文商品描述，中文解释仅作参考。"
             copyText={descriptionCopyText}
+            copyLabel="Copy Description"
           >
             <BilingualPanel
               title="后台可用版本"
               english={displayResult.description.english}
               chinese={displayResult.description.chinese}
-              note="小白提示：Product Description 可以比 Bullet 更自然，但仍然要避免夸大承诺。"
+              note="Product Description 可以比 Bullet 更自然，但仍然要避免夸大承诺。"
             />
           </ResultBlock>
 
           <ResultBlock
             id="search-terms"
-            title="SEO Tags / Search Terms / 关键词"
-            eyebrow="Search Terms"
-            description="给后台 Search Terms 使用，并配中文解释和侵权提醒。"
+            title="Search Terms"
+            eyebrow="Backend Search Terms"
+            description="后台关键词以英文为主，避免重复标题关键词和竞品品牌词。"
             copyText={searchTermsCopyText}
+            copyLabel="Copy Search Terms"
           >
             <BilingualPanel
               title="Backend Search Terms"
               english={displayResult.searchTerms.english}
               chinese={displayResult.searchTerms.chinese}
-              note="小白提示：这些词适合放在 Amazon 后台 Search Terms。不要堆砌竞品品牌词，也不要使用可能侵权的商标词。"
+              note="这些词适合放在 Amazon 后台 Search Terms。不要堆砌竞品品牌词，也不要使用可能侵权的商标词。"
             />
+          </ResultBlock>
+
+          <ResultBlock
+            id="compliance"
+            title="Compliance Notes / 风险提醒"
+            eyebrow="Compliance"
+            description="这些词和表达需要谨慎使用，避免 Listing 风险。"
+          >
+            <div className="overflow-hidden rounded-lg border border-line bg-white">
+              {complianceNotes.map((note, index) => (
+                <div
+                  key={note}
+                  className="flex gap-3 border-b border-line px-4 py-4 last:border-b-0 sm:px-5"
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-amberSoft text-xs font-semibold text-[#8a5a1e]">
+                    {index + 1}
+                  </span>
+                  <p className="text-sm leading-6 text-neutral-700">{note}</p>
+                </div>
+              ))}
+            </div>
+          </ResultBlock>
+
+          <ResultBlock
+            id="analysis"
+            title="选品与上新分析"
+            eyebrow="Product Analysis"
+            description="先判断产品适合卖给谁、解决什么问题，以及哪些表述需要谨慎。"
+          >
+            <div className="grid overflow-hidden rounded-lg border border-line bg-white md:grid-cols-2">
+              {analysisItems.map(([title, desc], index) => (
+                <div
+                  key={title}
+                  className="border-b border-line px-4 py-4 last:border-b-0 md:border-r md:[&:nth-child(2n)]:border-r-0 md:[&:nth-last-child(-n+2)]:border-b-0 sm:px-5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                    Insight {String(index + 1).padStart(2, "0")}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
+                  <p className="mt-2 text-sm leading-6 text-neutral-600">{desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 rounded-lg border border-orange-200 bg-amberSoft p-4">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0 text-[#8a5a1e]" />
+                <div>
+                  <p className="text-sm font-semibold text-[#8a5a1e]">需要补充的信息</p>
+                  <p className="mt-2 text-sm leading-6 text-[#8a5a1e]">
+                    建议补充准确尺寸、材质、包装内容、使用限制和真实测试数据。没有数据时，Listing 不会写
+                    heavy-duty、guaranteed、medical 这类容易带来风险的词。
+                  </p>
+                </div>
+              </div>
+            </div>
+            <SoftNote label="小白解释">
+              这个分析帮你先判断“产品应该卖给谁、解决什么问题、哪些话不能乱写”，避免直接生成一段看似漂亮但不准确的 Listing。
+            </SoftNote>
+          </ResultBlock>
+
+          <ResultBlock
+            id="competitors"
+            title="竞品分析"
+            eyebrow="Competitor Analysis"
+            description="把竞品表达拆开看，找到可以借鉴和可以避开的地方。"
+          >
+            <div className="overflow-hidden rounded-lg border border-line bg-white">
+              {competitorItems.map(([title, english, chinese]) => (
+                <article key={title} className="border-b border-line px-4 py-5 last:border-b-0 sm:px-5">
+                  <p className="text-sm font-semibold text-ink">{title}</p>
+                  <p className="mt-3 text-base font-medium leading-7 text-ink">{english}</p>
+                  <div className="mt-3 rounded-lg bg-neutral-50 px-4 py-3">
+                    <p className="text-xs font-semibold text-neutral-400">中文参照</p>
+                    <p className="mt-1 text-sm leading-6 text-neutral-600">{chinese}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </ResultBlock>
+
+          <ResultBlock
+            id="reviews"
+            title="评论痛点分析"
+            eyebrow="Review Pain Points"
+            description="从评论里提炼买家担心什么，再反向写进 Listing。"
+          >
+            <div className="grid overflow-hidden rounded-lg border border-line bg-white md:grid-cols-3">
+              {reviewPainItems.map(([title, desc], index) => (
+                <div
+                  key={title}
+                  className="border-b border-line px-4 py-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0 sm:px-5"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gold">
+                    Pain {String(index + 1).padStart(2, "0")}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
+                  <p className="mt-2 text-sm leading-6 text-neutral-600">{desc}</p>
+                </div>
+              ))}
+            </div>
+          </ResultBlock>
+
+          <ResultBlock
+            id="differentiation"
+            title="差异化卖点提炼"
+            eyebrow="Differentiation"
+            description="把普通功能整理成更明确的购买理由。"
+          >
+            <div className="overflow-hidden rounded-lg border border-line bg-white">
+              {safeDifferentiationItems.map((item, index) => (
+                <div
+                  key={item}
+                  className="grid gap-3 border-b border-line px-4 py-4 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:px-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-amberSoft text-xs font-semibold text-[#8a5a1e]">
+                      {index + 1}
+                    </span>
+                    <p className="text-sm font-semibold text-ink">{item}</p>
+                  </div>
+                  <p className="text-sm leading-6 text-neutral-600">
+                    适合放进标题或 Bullet，但需要结合真实尺寸和材质信息，不要编造数据。
+                  </p>
+                </div>
+              ))}
+            </div>
           </ResultBlock>
 
           <ResultBlock
@@ -822,7 +847,7 @@ export default function ResultPage() {
             size="md"
             aria-label="保存结果"
             onClick={saveCurrentResult}
-            disabled={isSaving}
+            disabled={isSaving || !hasDeepSeekResult}
           >
             <Save className="size-4" />
           </Button>
@@ -857,32 +882,6 @@ function BilingualPanel({
       {note ? <SoftNote label="说明">{note}</SoftNote> : null}
     </div>
   );
-}
-
-function formatBilingualCopy({
-  title,
-  english,
-  chinese,
-  note,
-}: {
-  title: string;
-  english: string;
-  chinese: string;
-  note?: string;
-}) {
-  return [
-    title,
-    "",
-    "English:",
-    english,
-    "",
-    "中文参照:",
-    chinese,
-    note ? "" : null,
-    note || null,
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 function MetaLine({ label, value }: { label: string; value: string }) {

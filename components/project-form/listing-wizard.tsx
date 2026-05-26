@@ -28,27 +28,25 @@ import { buildProjectDraftPayload } from "@/lib/project-draft";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 
 const draftDefaults = {
-  product_name_cn: "便携式折叠收纳篮",
+  product_name_cn: "",
   product_name_en: "",
   marketplace: "US",
-  category: "Home & Kitchen",
-  target_price: "$19.99",
-  target_user: "小户型家庭、宿舍用户、车主",
-  material: "PP + TPR",
+  category: "",
+  target_price: "",
+  target_user: "",
+  material: "",
   dimensions: "",
-  color: "米白色、灰色",
-  package_contents: "1 个折叠收纳篮",
-  usage_scenarios: "洗衣房、衣柜、厨房食品储物、汽车后备箱、宿舍、小公寓。",
-  core_features: "可折叠收纳，双侧提手，轻便搬运，开放式拿取，易擦拭。",
-  supplier_description: "这款折叠收纳篮适合家庭多场景使用，不用时可以折叠，节省空间。",
+  color: "",
+  package_contents: "",
+  usage_scenarios: "",
+  core_features: "",
+  supplier_description: "",
   notes: "",
-  competitor_title:
-    "Collapsible Laundry Basket with Handles, Foldable Storage Bin for Home, Dorm, Car and Closet",
+  competitor_title: "",
   competitor_url: "",
   competitor_selling_points: "",
-  review_pain_points:
-    "Some buyers said similar baskets are hard to keep upright, take too much space, or feel flimsy when carrying laundry.",
-  differentiation: "折叠后更薄，外观更简洁，适合小空间和车后备箱收纳。",
+  review_pain_points: "",
+  differentiation: "",
   english_style: "localized",
   language: "English",
 };
@@ -398,7 +396,7 @@ function BasicInfoStep({ fieldProps }: StepProps) {
           <Input {...fieldProps("product_name_cn")} />
         </Field>
         <Field label="产品英文名称" hint="不确定可以先空着，后续 AI 会生成更自然的英文名。" optional>
-          <Input placeholder="Collapsible Storage Basket" {...fieldProps("product_name_en")} />
+          <Input placeholder="可选：留空让 AI 生成" {...fieldProps("product_name_en")} />
         </Field>
         <Field label="Amazon 站点" hint="第一阶段只做 Amazon，不做其他平台。">
           <Select {...fieldProps("marketplace")}>
@@ -512,7 +510,7 @@ function GenerationSettingsStep({
       <SectionHeader
         icon={<Sparkles className="size-4" />}
         title="输出偏好"
-        description="第一阶段先展示完整 mock 结果。后续接入 DeepSeek 后，这些设置会进入提示词。"
+        description="这些设置会随真实产品资料一起进入 DeepSeek 提示词，用来控制最终 Listing 输出。"
       />
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="英文风格" hint="新手默认推荐自然本地化，英文更像真实 Amazon 卖家写法。">
@@ -574,7 +572,7 @@ function GeneratePreview() {
         <div>
           <p className="text-sm font-semibold text-ink">生成前确认</p>
           <p className="mt-1 text-sm leading-6 text-neutral-600">
-            点击生成后会进入 mock 结果页，输出下列 Amazon Listing 模块。
+            保存 Draft 后会进入结果页，点击重新生成才会调用 DeepSeek 输出下列 Amazon Listing 模块。
           </p>
         </div>
         <Badge tone="green">Ready</Badge>
@@ -597,7 +595,7 @@ function GeneratePreview() {
         })}
       </div>
       <div className="mt-4 rounded-lg bg-amberSoft p-3 text-sm leading-6 text-[#8a5a1e]">
-        小白提示：当前阶段不会调用 AI，也不会保存真实数据；这是为了先把页面流程和结果结构打磨到位。
+        小白提示：保存 Draft 不会调用 AI；只有进入结果页并点击重新生成，才会发起正式生成。
       </div>
     </div>
   );

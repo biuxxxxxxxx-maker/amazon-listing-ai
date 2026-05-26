@@ -168,6 +168,10 @@ export async function hasAIProviderKeyAsync() {
   return isUsableDeepSeekKey(await readServerEnv("DEEPSEEK_API_KEY"));
 }
 
+export async function isGenerationMockEnabled() {
+  return (await readServerEnv("ENABLE_GENERATION_MOCK")).toLowerCase() === "true";
+}
+
 function parseGeneratedJson(text: string) {
   const trimmed = text.trim();
   const withoutFence = trimmed

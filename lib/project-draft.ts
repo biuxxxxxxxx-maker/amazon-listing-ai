@@ -55,6 +55,10 @@ export function buildProjectDraftPayload(
     throw new Error("产品中文名称不能为空");
   }
 
+  if (!category) {
+    throw new Error("产品类目不能为空");
+  }
+
   const snapshot: Record<string, string | boolean | null> = {};
 
   for (const field of textFields) {
@@ -69,7 +73,7 @@ export function buildProjectDraftPayload(
     product_name_cn: productNameCn,
     product_name_en: optional(getText(formData, "product_name_en")),
     marketplace,
-    category: category || "Uncategorized",
+    category,
     target_price: optional(getText(formData, "target_price")),
     target_customer: optional(getText(formData, "target_user")),
     form_data: snapshot,

@@ -41,6 +41,15 @@ test.describe("listing creation and generation flow", () => {
     await page.goto("/projects/new");
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
     await expect(page.getByText("Step 1 / 4")).toBeVisible();
+    await expect(page.getByLabel("产品中文名称")).toHaveValue("");
+    await expect(page.getByLabel("产品英文名称")).toHaveValue("");
+    await expect(page.getByLabel("产品类目")).toHaveValue("");
+    await expect(page.getByLabel("目标售价")).toHaveValue("");
+    await expect(page.getByLabel("目标用户")).toHaveValue("");
+    await expect(page.getByText("便携式折叠收纳篮")).toHaveCount(0);
+    await expect(page.getByText("Collapsible Storage Basket")).toHaveCount(0);
+    await expect(page.getByText("Home & Kitchen")).toHaveCount(0);
+    await expect(page.getByText("$19.99")).toHaveCount(0);
 
     await page.getByLabel("产品中文名称").fill("行李箱");
     await page.getByLabel("产品类目").fill("Travel & Luggage");
@@ -75,6 +84,19 @@ test.describe("listing creation and generation flow", () => {
     expect(generationRequests[0].body.projectId).toBe("e2e-project");
     expect(JSON.stringify(generationRequests[0].body)).toContain("行李箱");
     await expect(page.getByText("Lightweight Carry-On Suitcase for Weekend Trips and Business Travel")).toBeVisible();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect(page.locator("#bullets")).toBeVisible();
+    await expect(page.locator("#description")).toBeVisible();
+    await expect(page.locator("#search-terms")).toBeVisible();
+    const titleBox = await page.locator("#title").boundingBox();
+    const bulletsBox = await page.locator("#bullets").boundingBox();
+    const descriptionBox = await page.locator("#description").boundingBox();
+    const searchTermsBox = await page.locator("#search-terms").boundingBox();
+    const analysisBox = await page.locator("#analysis").boundingBox();
+    expect(titleBox?.y ?? 0).toBeLessThan(analysisBox?.y ?? Number.POSITIVE_INFINITY);
+    expect(bulletsBox?.y ?? 0).toBeLessThan(analysisBox?.y ?? Number.POSITIVE_INFINITY);
+    expect(descriptionBox?.y ?? 0).toBeLessThan(analysisBox?.y ?? Number.POSITIVE_INFINITY);
+    expect(searchTermsBox?.y ?? 0).toBeLessThan(analysisBox?.y ?? Number.POSITIVE_INFINITY);
     await expect(page.getByText("便携式折叠收纳篮")).toHaveCount(0);
     await expect.poll(() => savedGenerationRows.length).toBe(1);
     expect(JSON.stringify(savedGenerationRows)).toContain("Lightweight Carry-On Suitcase");
@@ -102,6 +124,7 @@ test.describe("listing creation and generation flow", () => {
     await page.getByTestId("regenerate-listing-button").click();
     await expect(page.getByText("生成失败：E2E mocked generation failure")).toBeVisible();
     await expect(page.getByText("已先显示本地 mock 结果")).toHaveCount(0);
+    await expect(page.getByText("便携式折叠收纳篮")).toHaveCount(0);
     await expect(page.getByTestId("regenerate-listing-button")).toBeEnabled();
   });
 });

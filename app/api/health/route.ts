@@ -15,6 +15,7 @@ export async function GET() {
   const deepSeekKey = deepSeekKeyDiagnostic.value;
   const deepSeekBaseUrl = await readServerEnv("DEEPSEEK_BASE_URL");
   const deepSeekModel = await readServerEnv("DEEPSEEK_MODEL");
+  const generationMockEnabled = (await readServerEnv("ENABLE_GENERATION_MOCK")).toLowerCase() === "true";
   const supabaseUrl = await readServerEnv("NEXT_PUBLIC_SUPABASE_URL");
   const supabaseAnonKey = await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const keyLooksValid = provider === "deepseek" && isUsableDeepSeekKey(deepSeekKey);
@@ -29,10 +30,13 @@ export async function GET() {
       hasKey: Boolean(deepSeekKey),
       keyLooksValid,
       keySource: deepSeekKeyDiagnostic.source,
-      generationMode: keyLooksValid ? provider : "mock",
+      generationMode: keyLooksValid ? provider : generationMockEnabled ? "mock" : "error",
+      mockEnabled: generationMockEnabled,
       note: keyLooksValid
         ? "已检测到 DeepSeek API key。真实生成仍需要 DeepSeek API 余额。"
-        : "未检测到可用 DeepSeek API key，将使用本地 mock 结果。",
+        : generationMockEnabled
+          ? "未检测到可用 DeepSeek API key，且 ENABLE_GENERATION_MOCK=true，会使用本地 mock 结果。"
+          : "未检测到可用 DeepSeek API key，真实生成会显示错误，不会使用本地 mock 结果。",
       baseUrl: deepSeekBaseUrl || "https://api.deepseek.com/chat/completions",
       model: deepSeekModel || "deepseek-chat",
     },

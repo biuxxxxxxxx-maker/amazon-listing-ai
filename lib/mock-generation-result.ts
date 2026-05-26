@@ -36,7 +36,9 @@ export const mockGenerationResult = {
   copyReadyListing: fullListingText,
 };
 
-export type GenerationResult = typeof mockGenerationResult;
+export type GenerationResult = Omit<typeof mockGenerationResult, "source"> & {
+  source: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -67,22 +69,22 @@ function mergeRecord<T extends Record<string, unknown>>(fallback: T, value: unkn
   };
 }
 
-function arrayOrFallback<T>(value: unknown, fallback: T[]) {
-  return Array.isArray(value) && value.length > 0 ? (value as T[]) : fallback;
+function arrayValue<T>(value: unknown) {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
 function normalizeDeepSeekJsonResult(
   record: Record<string, unknown>,
   context?: unknown,
 ): GenerationResult {
-  const title = stringValue(record.title) || mockGenerationResult.title.english;
-  const titleCn = stringValue(record.title_cn) || mockGenerationResult.title.chinese;
+  const title = stringValue(record.title);
+  const titleCn = stringValue(record.title_cn);
   const bullets = Array.isArray(record.bullet_points)
     ? record.bullet_points
         .filter(isRecord)
         .map((bullet, index) => ({
-          english: stringValue(bullet.en) || mockGenerationResult.bullets[index]?.english || "",
-          chinese: stringValue(bullet.cn) || mockGenerationResult.bullets[index]?.chinese || "",
+          english: stringValue(bullet.en),
+          chinese: stringValue(bullet.cn),
           sellingPoint: stringValue(bullet.sellingPoint) || `Bullet ${index + 1}`,
           painPoint: stringValue(bullet.painPoint) || "根据产品资料提炼的买家关注点。",
         }))
@@ -100,8 +102,8 @@ function normalizeDeepSeekJsonResult(
         .filter(isRecord)
         .map((item, index) => ({
           type: `图片建议 ${index + 1}`,
-          focus: stringValue(item.scene) || mockGenerationResult.imageSuggestions[index]?.focus || "",
-          guidance: stringValue(item.cn) || mockGenerationResult.imageSuggestions[index]?.guidance || "",
+          focus: stringValue(item.scene),
+          guidance: stringValue(item.cn),
         }))
         .filter((item) => item.focus || item.guidance)
     : [];
@@ -124,30 +126,35 @@ function normalizeDeepSeekJsonResult(
     .join("\n\n");
 
   return {
-    ...mockGenerationResult,
     source: "deepseek",
     product: {
-      ...mockGenerationResult.product,
       nameCn:
         contextText(context, ["productName", "product_name_cn", "nameCn"]) ||
-        mockGenerationResult.product.nameCn,
+        contextText(context, ["product_name_en", "nameEn"]) ||
+        "Amazon Listing 项目",
+      marketplace: contextText(context, ["marketplace"]) || "US",
+      category: contextText(context, ["category"]) || "Uncategorized",
+    },
+    analysis: {
+      coreSellingPoints: [],
+      beginnerExplanation: "",
     },
     title: {
       english: title,
       chinese: titleCn,
     },
-    bullets: bullets.length > 0 ? bullets : mockGenerationResult.bullets,
+    bullets,
     description: {
-      english: stringValue(description.en) || mockGenerationResult.description.english,
-      chinese: stringValue(description.cn) || mockGenerationResult.description.chinese,
+      english: stringValue(description.en),
+      chinese: stringValue(description.cn),
     },
     searchTerms: {
-      english: searchTerms.length > 0 ? searchTerms.join(" ") : mockGenerationResult.searchTerms.english,
-      chinese: keywordExplanation || mockGenerationResult.searchTerms.chinese,
+      english: searchTerms.join(" "),
+      chinese: keywordExplanation,
     },
-    imageSuggestions:
-      imageSuggestions.length > 0 ? imageSuggestions : mockGenerationResult.imageSuggestions,
-    copyReadyListing: copyReadyListing || mockGenerationResult.copyReadyListing,
+    faq: [],
+    imageSuggestions,
+    copyReadyListing,
   };
 }
 
@@ -159,22 +166,26 @@ export function normalizeGenerationResult(value: unknown, context?: unknown): Ge
   }
 
   return {
-    ...mockGenerationResult,
-    ...record,
-    product: mergeRecord(mockGenerationResult.product, record.product),
-    analysis: mergeRecord(mockGenerationResult.analysis, record.analysis),
-    title: mergeRecord(mockGenerationResult.title, record.title),
-    bullets: arrayOrFallback(record.bullets, mockGenerationResult.bullets),
-    description: mergeRecord(mockGenerationResult.description, record.description),
-    searchTerms: mergeRecord(mockGenerationResult.searchTerms, record.searchTerms),
-    faq: arrayOrFallback(record.faq, mockGenerationResult.faq),
-    imageSuggestions: arrayOrFallback(
+    source: stringValue(record.source) || "unknown",
+    product: mergeRecord(
+      { nameCn: "Amazon Listing 项目", marketplace: "US", category: "Uncategorized" },
+      record.product,
+    ),
+    analysis: mergeRecord(
+      { coreSellingPoints: [], beginnerExplanation: "" },
+      record.analysis,
+    ),
+    title: mergeRecord({ english: "", chinese: "" }, record.title),
+    bullets: arrayValue<GenerationResult["bullets"][number]>(record.bullets),
+    description: mergeRecord({ english: "", chinese: "" }, record.description),
+    searchTerms: mergeRecord({ english: "", chinese: "" }, record.searchTerms),
+    faq: arrayValue<GenerationResult["faq"][number]>(record.faq),
+    imageSuggestions: arrayValue<GenerationResult["imageSuggestions"][number]>(
       record.imageSuggestions,
-      mockGenerationResult.imageSuggestions,
     ),
     copyReadyListing:
       typeof record.copyReadyListing === "string" && record.copyReadyListing.trim().length > 0
         ? record.copyReadyListing
-        : mockGenerationResult.copyReadyListing,
+        : "",
   };
 }
