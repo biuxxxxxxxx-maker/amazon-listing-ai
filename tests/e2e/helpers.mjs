@@ -57,7 +57,12 @@ export async function getHealth(request) {
 }
 
 export function hasSupabaseEnv(health) {
-  return Boolean(health?.supabase?.hasUrl && health?.supabase?.hasAnonKey);
+  return Boolean(
+    health?.supabase?.hasUrl &&
+      health?.supabase?.urlLooksValid &&
+      health?.supabase?.hasAnonKey &&
+      health?.supabase?.anonKeyLooksValid,
+  );
 }
 
 export async function mockSupabaseAuth(page) {
@@ -86,7 +91,16 @@ export async function mockSupabaseAuth(page) {
     });
   });
 
-  await page.route("**/auth/v1/signup", async (route) => {
+  await page.route("**/auth/v1/signup**", async (route) => {
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({
+        status: 204,
+        headers: corsJsonHeaders(),
+        body: "",
+      });
+      return;
+    }
+
     await route.fulfill({
       status: 400,
       headers: corsJsonHeaders(),

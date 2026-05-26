@@ -1,8 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { readServerEnv } from "@/lib/cloudflare-env";
+import { normalizeEnvText, normalizeSupabaseProjectUrl } from "@/lib/supabase-config";
 
 export function hasSupabaseServerEnv() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  return Boolean(
+    normalizeEnvText(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+      normalizeEnvText(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  );
 }
 
 export function readBearerToken(authorizationHeader: string | null) {
@@ -35,8 +39,8 @@ export function readRequestAccessToken(request: Request) {
 }
 
 export function getServerSupabase(accessToken?: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = normalizeSupabaseProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const supabaseAnonKey = normalizeEnvText(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Supabase 环境变量未配置。");
@@ -59,14 +63,14 @@ export function getServerSupabase(accessToken?: string) {
 
 export async function hasSupabaseServerEnvAsync() {
   return Boolean(
-    (await readServerEnv("NEXT_PUBLIC_SUPABASE_URL")) &&
-      (await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")),
+    normalizeEnvText(await readServerEnv("NEXT_PUBLIC_SUPABASE_URL")) &&
+      normalizeEnvText(await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY")),
   );
 }
 
 export async function getServerSupabaseAsync(accessToken?: string) {
-  const supabaseUrl = await readServerEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const supabaseAnonKey = await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const supabaseUrl = normalizeSupabaseProjectUrl(await readServerEnv("NEXT_PUBLIC_SUPABASE_URL"));
+  const supabaseAnonKey = normalizeEnvText(await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY"));
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error("Supabase 环境变量未配置。");

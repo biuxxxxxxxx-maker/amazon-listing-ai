@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerEnvDiagnostic, readServerEnv } from "@/lib/cloudflare-env";
 import { isUsableDeepSeekKey, readAIProvider } from "@/lib/ai-listing";
+import {
+  getSupabaseAnonKeyDiagnostic,
+  getSupabaseUrlDiagnostic,
+} from "@/lib/supabase-config";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,6 +18,8 @@ export async function GET() {
   const supabaseUrl = await readServerEnv("NEXT_PUBLIC_SUPABASE_URL");
   const supabaseAnonKey = await readServerEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const keyLooksValid = provider === "deepseek" && isUsableDeepSeekKey(deepSeekKey);
+  const supabaseUrlDiagnostic = getSupabaseUrlDiagnostic(supabaseUrl);
+  const supabaseAnonKeyDiagnostic = getSupabaseAnonKeyDiagnostic(supabaseAnonKey);
 
   return NextResponse.json({
     ok: true,
@@ -38,8 +44,8 @@ export async function GET() {
       model: deepSeekModel || "deepseek-chat",
     },
     supabase: {
-      hasUrl: Boolean(supabaseUrl),
-      hasAnonKey: Boolean(supabaseAnonKey),
+      ...supabaseUrlDiagnostic,
+      ...supabaseAnonKeyDiagnostic,
     },
   });
 }
