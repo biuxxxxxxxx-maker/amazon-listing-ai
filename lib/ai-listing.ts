@@ -73,6 +73,7 @@ export const amazonListingResultSchema = {
 type GenerateListingInput = {
   projectId?: string;
   projectData?: unknown;
+  allowMockFallback?: boolean;
 };
 
 type DeepSeekResponse = {
@@ -189,8 +190,13 @@ function parseGeneratedJson(text: string) {
 
 async function generateWithDeepSeek(input: GenerateListingInput) {
   const apiKey = await readServerEnv("DEEPSEEK_API_KEY");
+  const allowMockFallback = input.allowMockFallback === true;
 
   if (!isUsableDeepSeekKey(apiKey)) {
+    if (!allowMockFallback) {
+      throw new Error("DEEPSEEK_API_KEY 未配置或不可用，真实项目生成不能使用 mock 结果。");
+    }
+
     return mockListingResult(
       "当前未配置可用的 DeepSeek API key，已使用本地 mock 结果。请在 DeepSeek 平台购买 API 余额后再使用真实生成。",
     );
@@ -201,6 +207,12 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
   let response: Response;
+
+  const promptProjectData = {
+    project_id: input.projectId,
+    project_data: input.projectData || {},
+  };
+  const prompt = buildListingUserPrompt(promptProjectData);
 
   try {
     response = await fetch(baseUrl, {
@@ -219,16 +231,21 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
           },
           {
             role: "user",
-            content: buildListingUserPrompt({
-              project_id: input.projectId,
-              project_data: input.projectData || {},
-            }),
+            content: prompt,
           },
         ],
         response_format: { type: "json_object" },
       }),
     });
-  } catch {
+  } catch (error) {
+    if (!allowMockFallback) {
+      throw new Error(
+        error instanceof Error
+          ? `DeepSeek 请求失败：${error.message}`
+          : "DeepSeek 请求失败，请稍后再试。",
+      );
+    }
+
     return mockListingResult("DeepSeek 请求超时或连接失败，已使用本地 mock 结果。");
   } finally {
     clearTimeout(timeoutId);
@@ -240,6 +257,13 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
 
   if (!response.ok) {
     if (AI_UNAVAILABLE_STATUS_CODES.has(response.status)) {
+      if (!allowMockFallback) {
+        throw new Error(
+          payload?.error?.message ||
+            `DeepSeek API 暂不可用或账号余额不足，状态码：${response.status}`,
+        );
+      }
+
       return mockListingResult(
         "DeepSeek API key 暂不可用或当前账号没有 API 余额，已使用本地 mock 结果。请在 DeepSeek 平台购买 API 余额后再使用真实生成。",
       );
@@ -251,12 +275,20 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
   const text = extractDeepSeekText(payload || {});
 
   if (!text) {
+    if (!allowMockFallback) {
+      throw new Error("DeepSeek 没有返回可解析的 Listing 结果。");
+    }
+
     return mockListingResult("DeepSeek 没有返回可解析的 Listing 结果，已使用本地 mock 结果。");
   }
 
   const parsedResult = parseGeneratedJson(text);
 
   if (!parsedResult) {
+    if (!allowMockFallback) {
+      throw new Error("DeepSeek 返回了非 JSON 文本，无法保存为正式 Listing 结果。");
+    }
+
     return mockListingResult("DeepSeek 返回了非 JSON 文本，已使用本地 mock 结果。");
   }
 

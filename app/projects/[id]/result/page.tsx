@@ -69,6 +69,7 @@ export default function ResultPage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [savedAt, setSavedAt] = useState("");
   const [displayResult, setDisplayResult] = useState<GenerationResult>(mockGenerationResult);
+  const [displayModel, setDisplayModel] = useState("mock-local");
   const [projectData, setProjectData] = useState<ProjectData | null>(null);
 
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function ResultPage() {
 
         const { data, error } = await supabase
           .from("generation_results")
-          .select("created_at,result_json")
+          .select("created_at,model,result_json")
           .eq("project_id", projectId)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -124,6 +125,7 @@ export default function ResultPage() {
         if (data?.created_at) {
           if (data.result_json) {
             setDisplayResult(normalizeGenerationResult(data.result_json));
+            setDisplayModel(data.model || "mock-local");
           }
           setSavedAt(String(data.created_at).slice(0, 19).replace("T", " "));
           setStatusMessage("已读取到 Supabase 中保存过的生成结果。");
@@ -155,6 +157,11 @@ export default function ResultPage() {
       return;
     }
 
+    if (model === "mock-local" || resultJson.source === "mock") {
+      setStatusMessage("当前结果不是 DeepSeek 正式生成结果，已停止保存，避免把 mock 数据写入 Supabase。");
+      return;
+    }
+
     setIsSaving(true);
     if (options.clearStatus !== false) {
       setStatusMessage("");
@@ -173,8 +180,9 @@ export default function ResultPage() {
         project_id: projectId,
         model,
         input_snapshot: {
-          source: "local-mvp",
+          source: "deepseek",
           saved_from: "result_page",
+          project: projectData,
         },
         result_json: resultJson,
       });
@@ -190,6 +198,7 @@ export default function ResultPage() {
 
       const now = new Date().toLocaleString("zh-CN", { hour12: false });
       setDisplayResult(normalizeGenerationResult(resultJson));
+      setDisplayModel(model);
       setSavedAt(now);
       setStatusMessage(
         model === "mock-local"
@@ -207,15 +216,15 @@ export default function ResultPage() {
     }
   }
 
-  async function saveMockResult() {
-    await saveGeneratedResult(mockGenerationResult, "mock-local");
+  async function saveCurrentResult() {
+    await saveGeneratedResult(displayResult, displayModel);
   }
 
   async function regenerateListing() {
     setIsGenerating(true);
     setStatusMessage("");
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 30000);
 
     try {
       const headers: Record<string, string> = {
@@ -249,20 +258,45 @@ export default function ResultPage() {
         throw new Error(data?.error || "生成失败，请稍后再试。");
       }
 
-      const normalizedResult = normalizeGenerationResult(data.result);
+      if (projectId !== "demo" && data.source !== "deepseek") {
+        throw new Error(data.fallbackReason || "生成接口返回了 mock 结果，已停止保存。请检查 DeepSeek 配置。");
+      }
+
+      const normalizedResult = normalizeGenerationResult(data.result, projectData || undefined);
+      const projectProduct = projectData
+        ? {
+            ...normalizedResult.product,
+            nameCn: projectData.product_name_cn || normalizedResult.product.nameCn,
+            marketplace: projectData.marketplace || normalizedResult.product.marketplace,
+            category: projectData.category || normalizedResult.product.category,
+          }
+        : normalizedResult.product;
+      const generatedResult =
+        data.source === "deepseek"
+          ? ({
+              ...normalizedResult,
+              product: projectProduct,
+              source: "deepseek",
+            } as GenerationResult)
+          : ({
+              ...normalizedResult,
+              product: projectProduct,
+            } as GenerationResult);
 
       if (projectId !== "demo") {
-        setDisplayResult(normalizedResult);
+        setDisplayResult(generatedResult);
+        setDisplayModel(data.model || "mock-local");
         setStatusMessage(
           data.source === "deepseek"
             ? "已生成结果，正在后台保存到 Supabase。"
             : data.fallbackReason || "已返回 mock 生成结果，正在后台保存到 Supabase。",
         );
-        void saveGeneratedResult(normalizedResult, data.model || "mock-local", {
+        void saveGeneratedResult(generatedResult, data.model || "mock-local", {
           clearStatus: false,
         });
       } else {
-        setDisplayResult(normalizedResult);
+        setDisplayResult(generatedResult);
+        setDisplayModel(data.model || "mock-local");
         setStatusMessage(
           data.source === "deepseek"
             ? "已调用 DeepSeek 生成结果。当前是 demo 项目，所以没有写入数据库。"
@@ -271,8 +305,7 @@ export default function ResultPage() {
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        setDisplayResult(mockGenerationResult);
-        setStatusMessage("生成请求响应较慢，已先显示本地 mock 结果，避免页面长时间等待。");
+        setStatusMessage("生成失败：DeepSeek 响应超时，未保存 mock 结果。请稍后重试。");
         return;
       }
 
@@ -349,7 +382,7 @@ export default function ResultPage() {
               <RefreshCw className="size-4" />
               {isGenerating ? "生成中" : "重新生成"}
             </Button>
-            <Button variant="warm" onClick={saveMockResult} disabled={isSaving}>
+            <Button variant="warm" onClick={saveCurrentResult} disabled={isSaving}>
               <Save className="size-4" />
               {isSaving ? "保存中" : "保存结果"}
             </Button>
@@ -788,7 +821,7 @@ export default function ResultPage() {
             variant="warm"
             size="md"
             aria-label="保存结果"
-            onClick={saveMockResult}
+            onClick={saveCurrentResult}
             disabled={isSaving}
           >
             <Save className="size-4" />

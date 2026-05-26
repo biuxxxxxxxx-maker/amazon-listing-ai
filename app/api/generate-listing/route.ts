@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateAmazonListing, hasAIProviderKeyAsync } from "@/lib/ai-listing";
+import { generateAmazonListing, readAIProvider } from "@/lib/ai-listing";
+import { readServerEnv } from "@/lib/cloudflare-env";
 import { shouldUseSupabaseGenerationAuth } from "@/lib/generation-auth";
 import {
   getServerSupabaseAsync,
@@ -41,22 +42,40 @@ function buildProjectDataFromBody(body: Record<string, unknown>) {
   };
 }
 
+function readProjectLogFields(projectData: unknown) {
+  if (!isRecord(projectData)) {
+    return {
+      productName: "",
+      category: "",
+      marketplace: "",
+    };
+  }
+
+  return {
+    productName:
+      getBodyText(projectData, "product_name_cn") ||
+      getBodyText(projectData, "productName"),
+    category: getBodyText(projectData, "category"),
+    marketplace: getBodyText(projectData, "marketplace"),
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const rawBody = await request.json().catch(() => ({}));
     const body = isRecord(rawBody) ? rawBody : {};
     const projectId = typeof body.projectId === "string" ? body.projectId : undefined;
     let projectData = buildProjectDataFromBody(body);
-    const hasAIProviderKey = await hasAIProviderKeyAsync();
     const requiresProjectAuth = shouldUseSupabaseGenerationAuth({
       projectId: projectId || "",
       supabaseReady: true,
     });
 
-    if (!hasAIProviderKey || !requiresProjectAuth) {
+    if (!requiresProjectAuth) {
       const generation = await generateAmazonListing({
         projectId,
         projectData,
+        allowMockFallback: true,
       });
 
       return NextResponse.json(generation);
@@ -104,9 +123,23 @@ export async function POST(request: Request) {
       }
     }
 
+    const provider = await readAIProvider();
+    const model = (await readServerEnv("DEEPSEEK_MODEL")) || "deepseek-chat";
+    const projectLogFields = readProjectLogFields(projectData);
+
+    console.log("[generate-listing]", {
+      provider,
+      model,
+      productName: projectLogFields.productName,
+      category: projectLogFields.category,
+      marketplace: projectLogFields.marketplace,
+      mock: !requiresProjectAuth,
+    });
+
     const generation = await generateAmazonListing({
       projectId,
       projectData,
+      allowMockFallback: !requiresProjectAuth,
     });
 
     return NextResponse.json(generation);
