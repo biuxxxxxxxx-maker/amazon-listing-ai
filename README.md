@@ -1,6 +1,6 @@
 # Work UP
 
-Work UP is an Amazon-only AI Listing assistant for beginner sellers. The MVP includes Supabase email auth, project storage, result storage, and a protected DeepSeek generation endpoint with a mock fallback for local development.
+Work UP is an Amazon-only AI Listing assistant for beginner sellers. The current core flow includes Supabase email auth, project Draft storage, Work UP Product Brief / Competitor Insights / Listing Strategy modules, a protected DeepSeek generation endpoint, GenerationResult validation, the new result page, and English-only copy helpers.
 
 ## Routes
 
@@ -9,8 +9,8 @@ Work UP is an Amazon-only AI Listing assistant for beginner sellers. The MVP inc
 - `/register` Supabase email registration UI.
 - `/dashboard` Project dashboard. Reads Supabase projects from the browser session.
 - `/projects/new` Four-step Listing creation flow. Saves a Draft project to Supabase.
-- `/projects/demo/result` AI result page with mock fallback.
-- `/product-analysis`, `/competitor-analysis`, `/listing-generator`, `/seo-keywords`, `/image-suggestions` MVP tool pages with front-end mock generation.
+- `/projects/[id]/result` Work UP result page. Shows Final Amazon Listing first, then quality, strategy, missing info, assumptions, competitor insights, compliance notes, and analysis.
+- `/product-analysis`, `/competitor-analysis`, `/listing-generator`, `/seo-keywords`, `/image-suggestions` MVP tool preview pages.
 
 ## Local Run
 
@@ -43,8 +43,8 @@ If the browser says the site cannot be reached, the development server is not ru
 
 1. Create a Supabase project.
 2. Copy `.env.example` to `.env.local`.
-3. Fill in Supabase values. If you have not purchased DeepSeek API balance yet, leave
-   `DEEPSEEK_API_KEY` empty; the app will use the local mock result.
+3. Fill in Supabase values. For real generation, configure a valid `DEEPSEEK_API_KEY`.
+   If the key is missing or invalid, real generation returns a visible error instead of using mock output.
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
@@ -59,7 +59,7 @@ DEEPSEEK_MODEL=deepseek-chat
 5. In Supabase Auth, either disable email confirmation for development or create a confirmed user manually.
 6. Open `/login`, log in, then create a Listing project.
 
-When Supabase env vars are missing, mock pages stay viewable for UI preview. When Supabase env vars are present, Dashboard and generation require login.
+When Supabase env vars are missing, static preview pages can still be viewed. When Supabase env vars are present, Dashboard and generation require login.
 
 `DEEPSEEK_API_KEY` is server-only. Do not prefix it with `NEXT_PUBLIC_`.
 
@@ -73,13 +73,23 @@ POST /api/generate-listing
 
 Behavior:
 
-- Without a usable `DEEPSEEK_API_KEY`, the route returns the structured local mock result.
-- With a usable `DEEPSEEK_API_KEY`, the route calls DeepSeek Chat Completions and asks for structured bilingual Amazon Listing JSON.
+- The route reads the real project row and `form_data`.
+- The route builds `ProductBrief`, `CompetitorInsights`, `ListingStrategy`, and a Work UP listing prompt.
+- With a usable `DEEPSEEK_API_KEY`, the route calls DeepSeek Chat Completions and asks for strict Work UP `GenerationResult` JSON.
+- DeepSeek output must pass `validateGenerationResult` before it can be returned as a successful result.
 - `DEEPSEEK_BASE_URL` defaults to `https://api.deepseek.com/chat/completions`.
 - Set `DEEPSEEK_MODEL` to `deepseek-chat` or `deepseek-reasoner`.
-- If the key is malformed, expired, unauthorized, or the account has no API balance, the route falls back to mock instead of breaking the page.
-- The result page can save generated output into `generation_results`.
+- If the key is missing, malformed, expired, unauthorized, out of balance, times out, returns non-JSON, or fails validation, the route returns the real error. It does not fallback to mock.
+- `ENABLE_GENERATION_MOCK=true` is only a non-production development placeholder. It must not be used in production and must not save mock output to real `generation_results`.
+- Successful generated output can be saved into `generation_results` only when `source === "deepseek"`, `model !== "mock-local"`, and the result matches the Work UP `GenerationResult` schema.
 - When Supabase is configured, this API requires the logged-in user's access token and reads the project through Supabase RLS.
+
+## Mock Boundary
+
+- `mockGenerationResult` is landing-page preview data only.
+- The landing preview may show static mock content, but it must not call `/api/generate-listing`.
+- Real project pages, generation routes, result pages, and Supabase saved results must not use `mockGenerationResult`.
+- Old mock or old schema results are not treated as successful Work UP results; users should regenerate to get the new Listing format.
 
 ## Cloudflare Deployment Checklist
 
@@ -147,7 +157,7 @@ Register/Login -> Dashboard -> New Listing -> Result Page -> Generate -> Save Re
 
 ## Current Scope
 
-Current MVP supports Supabase browser-side auth, real Draft saving, real project reading, result saving, and a protected server-side DeepSeek generation route with mock fallback.
+Current scope supports Supabase browser-side auth, real Draft saving, real project reading, ProductBrief, CompetitorInsights, ListingStrategy, ListingPrompt, GenerationResultValidation, result saving, the new result page, and English-only copy. Real generation does not fallback to mock.
 
 ## Production Notes
 

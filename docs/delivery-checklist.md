@@ -101,6 +101,21 @@ npm run deploy
 
 ## DeepSeek
 
-- If `DEEPSEEK_API_KEY` is missing, the app returns mock Listing output.
-- If `DEEPSEEK_API_KEY` is present, `/api/generate-listing` calls DeepSeek Chat Completions.
+- `/api/generate-listing` reads the real project Draft, builds ProductBrief, CompetitorInsights, ListingStrategy, ListingPrompt, calls DeepSeek Chat Completions, and validates the returned Work UP GenerationResult.
+- If `DEEPSEEK_API_KEY` is missing, invalid, expired, unauthorized, out of balance, or the network request fails, the app must display the real error.
+- If DeepSeek returns non-JSON or a JSON shape that fails validation, the app must display the real validation/parsing error.
+- Production must not fallback to mock output.
+- `ENABLE_GENERATION_MOCK=true` is only a non-production development placeholder and must not save mock output to real `generation_results`.
+- Saved generation rows must have `source: "deepseek"`, must not use `model: "mock-local"`, and must match the Work UP GenerationResult schema.
+- Old mock or old schema results must not be displayed as successful results; ask the user to regenerate the Work UP新版 Listing.
 - When Supabase is configured, `/api/generate-listing` requires a valid logged-in user token.
+
+## Current Work UP Core Modules
+
+- ProductBrief: standardizes raw project input into confirmed facts, missing info, prohibited claims, and completeness.
+- CompetitorInsights: keeps competitor titles, bullets, URLs, review pain points, risky claims, blocked claims, and opportunities separate from our confirmed facts.
+- ListingStrategy: chooses primary/secondary keywords, positioning, five selling-point slots, avoidClaims, and safeClaims.
+- ListingPrompt: passes ProductBrief, CompetitorInsights, and ListingStrategy into DeepSeek as strict JSON context.
+- GenerationResultValidation: rejects mock source, `mock-local`, non-5 bullets, blocked claims, invalid English fields, and malformed schema.
+- New result page: shows Final Amazon Listing first, then quality, strategy, missing info, assumptions, compliance, competitor insights, and analysis.
+- English-only Copy: copies only `finalListing.*.english` values.
