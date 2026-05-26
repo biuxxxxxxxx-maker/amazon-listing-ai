@@ -186,6 +186,24 @@ const workUpGenerationResult = {
   },
 };
 
+function captureProjectInsertRequests(page, target) {
+  page.on("request", (request) => {
+    if (!request.url().includes("/rest/v1/product_projects") || request.method() !== "POST") {
+      return;
+    }
+
+    try {
+      target.push(request.postDataJSON());
+    } catch {
+      const body = request.postData();
+
+      if (body) {
+        target.push(JSON.parse(body));
+      }
+    }
+  });
+}
+
 test.describe("listing creation and generation flow", () => {
   test("generation API is called only from the result flow and is mocked in E2E", async ({
     page,
@@ -196,7 +214,9 @@ test.describe("listing creation and generation flow", () => {
 
     const generationRequests = [];
     const savedGenerationRows = [];
+    const savedProjectRows = [];
 
+    captureProjectInsertRequests(page, savedProjectRows);
     await mockSupabaseProjectApi(page, {
       onGenerationInsert: (body) => savedGenerationRows.push(body),
     });
@@ -229,6 +249,7 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByText("Step 1 / 4")).toBeVisible();
     await expect(page.getByLabel("产品中文名称")).toHaveValue("");
     await expect(page.getByLabel("产品英文名称")).toHaveValue("");
+    await expect(page.getByLabel("Amazon 站点")).toHaveValue("");
     await expect(page.getByLabel("产品类目")).toHaveValue("");
     await expect(page.getByLabel("目标售价")).toHaveValue("");
     await expect(page.getByLabel("目标用户")).toHaveValue("");
@@ -238,16 +259,14 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByText("$19.99")).toHaveCount(0);
 
     await page.getByLabel("产品中文名称").fill("行李箱");
+    await page.getByLabel("Amazon 站点").selectOption("US");
     await page.getByLabel("产品类目").fill("Travel & Luggage");
     await expect(generationRequests).toHaveLength(0);
 
     await page.getByTestId("listing-next-step").click();
     await expect(page.getByText("Step 2 / 4")).toBeVisible();
-    await page.getByLabel("材质").fill("PC");
-    await page.getByLabel("核心功能").fill("轻便箱体、顺滑滚轮、内部收纳分区。");
     await page.getByTestId("listing-next-step").click();
     await expect(page.getByText("Step 3 / 4")).toBeVisible();
-    await page.getByLabel("自己想突出的差异化").fill("轻便耐用，适合短途出行。");
     await page.getByTestId("listing-next-step").click();
     await expect(page.getByText("Step 4 / 4")).toBeVisible();
     await expect(generationRequests).toHaveLength(0);
@@ -256,6 +275,19 @@ test.describe("listing creation and generation flow", () => {
     await expect(draftSubmit).toBeVisible();
     await draftSubmit.click();
     await expect(page).toHaveURL(/\/projects\/e2e-project\/result/);
+    expect(savedProjectRows).toHaveLength(1);
+    expect(savedProjectRows[0].product_name_cn).toBe("行李箱");
+    expect(savedProjectRows[0].marketplace).toBe("US");
+    expect(savedProjectRows[0].category).toBe("Travel & Luggage");
+    expect(savedProjectRows[0].form_data.product_name_cn).toBe("行李箱");
+    expect(savedProjectRows[0].form_data.marketplace).toBe("US");
+    expect(savedProjectRows[0].form_data.category).toBe("Travel & Luggage");
+    expect(savedProjectRows[0].form_data.color).toBeNull();
+    expect(savedProjectRows[0].form_data.material).toBeNull();
+    expect(JSON.stringify(savedProjectRows[0])).not.toContain("便携式折叠收纳篮");
+    expect(JSON.stringify(savedProjectRows[0])).not.toContain("Collapsible Storage Basket");
+    expect(JSON.stringify(savedProjectRows[0])).not.toContain("Home & Kitchen");
+    expect(JSON.stringify(savedProjectRows[0])).not.toContain("$19.99");
     await expect(page.getByRole("heading", { name: "Work UP Listing Result" })).toBeVisible();
     await expect(page.getByText("当前项目：")).toBeVisible();
     await expect(page.getByText("行李箱").first()).toBeVisible();
@@ -296,6 +328,97 @@ test.describe("listing creation and generation flow", () => {
     await expect.poll(() => savedGenerationRows.length).toBe(1);
     expect(JSON.stringify(savedGenerationRows)).toContain("Black PC Hard Shell Suitcase");
     expect(JSON.stringify(savedGenerationRows)).not.toContain("便携式折叠收纳篮");
+  });
+
+  test("optional product fields and competitor inputs are saved into draft form_data only", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the authenticated listing flow.");
+
+    const savedProjectRows = [];
+
+    captureProjectInsertRequests(page, savedProjectRows);
+    await mockSupabaseProjectApi(page);
+
+    await signInWithMockSession(page);
+    await page.goto("/projects/new");
+    await page.getByLabel("产品中文名称").fill("行李箱");
+    await page.getByLabel("Amazon 站点").selectOption("US");
+    await page.getByLabel("产品类目").fill("Travel & Luggage");
+    await page.getByTestId("listing-next-step").click();
+    await page.getByLabel("颜色").fill("黑色");
+    await page.getByLabel("材质").fill("ABS");
+    await page.getByTestId("listing-next-step").click();
+    await page.getByLabel("竞品标题").fill("Carry On Luggage with Spinner Wheels");
+    await page.getByLabel("竞品五点").fill("TSA Lock and expandable design");
+    await page.getByLabel("评论痛点").fill("zipper issue");
+    await page.getByLabel("我方差异化").fill("黑色 ABS 箱体，适合基础旅行需求。");
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-draft-submit").click();
+
+    await expect(page).toHaveURL(/\/projects\/e2e-project\/result/);
+    expect(savedProjectRows).toHaveLength(1);
+    expect(savedProjectRows[0].form_data.color).toBe("黑色");
+    expect(savedProjectRows[0].form_data.material).toBe("ABS");
+    expect(savedProjectRows[0].form_data.competitor_title).toBe(
+      "Carry On Luggage with Spinner Wheels",
+    );
+    expect(savedProjectRows[0].form_data.competitor_selling_points).toBe(
+      "TSA Lock and expandable design",
+    );
+    expect(savedProjectRows[0].form_data.review_pain_points).toBe("zipper issue");
+    expect(savedProjectRows[0].form_data.differentiation).toBe(
+      "黑色 ABS 箱体，适合基础旅行需求。",
+    );
+    expect(savedProjectRows[0].form_data.productBrief).toBeUndefined();
+    expect(savedProjectRows[0].form_data.listingStrategy).toBeUndefined();
+    expect(savedProjectRows[0].form_data.generationResult).toBeUndefined();
+  });
+
+  test("missing required fields show validation errors and do not save draft", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the authenticated listing flow.");
+
+    const savedProjectRows = [];
+
+    captureProjectInsertRequests(page, savedProjectRows);
+    await mockSupabaseProjectApi(page);
+
+    async function submitDraftFromNewPage() {
+      await page.goto("/projects/new");
+      await page.getByTestId("listing-next-step").click();
+      await page.getByTestId("listing-next-step").click();
+      await page.getByTestId("listing-next-step").click();
+      await page.getByTestId("listing-draft-submit").click();
+    }
+
+    await signInWithMockSession(page);
+
+    await submitDraftFromNewPage();
+    await expect(page.getByText("保存失败：产品中文名称不能为空")).toBeVisible();
+
+    await page.goto("/projects/new");
+    await page.getByLabel("产品中文名称").fill("行李箱");
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-draft-submit").click();
+    await expect(page.getByText("保存失败：Amazon 站点不能为空")).toBeVisible();
+
+    await page.goto("/projects/new");
+    await page.getByLabel("产品中文名称").fill("行李箱");
+    await page.getByLabel("Amazon 站点").selectOption("US");
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-next-step").click();
+    await page.getByTestId("listing-draft-submit").click();
+    await expect(page.getByText("保存失败：产品类目不能为空")).toBeVisible();
+    expect(savedProjectRows).toHaveLength(0);
   });
 
   test("old mock generation response is not displayed as a successful Work UP result", async ({

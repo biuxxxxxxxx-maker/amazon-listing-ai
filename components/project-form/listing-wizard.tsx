@@ -30,17 +30,24 @@ import { getBrowserSupabase } from "@/lib/supabase-browser";
 const draftDefaults = {
   product_name_cn: "",
   product_name_en: "",
-  marketplace: "US",
+  marketplace: "",
   category: "",
   target_price: "",
+  target_customer: "",
   target_user: "",
   material: "",
   dimensions: "",
+  size: "",
+  weight: "",
+  capacity: "",
   color: "",
+  package_quantity: "",
   package_contents: "",
+  use_cases: "",
   usage_scenarios: "",
   core_features: "",
   supplier_description: "",
+  prohibited_claims: "",
   notes: "",
   competitor_title: "",
   competitor_url: "",
@@ -56,21 +63,21 @@ type DraftField = keyof typeof draftDefaults;
 const stepGuides = [
   {
     title: "先定产品边界",
-    score: "基础资料 70%",
-    impact: "影响标题、目标人群、类目表达和关键词方向。",
-    tips: ["中文名越具体越好", "英文名没有把握可以空着", "目标用户请写真实买家"],
+    score: "三项必填",
+    impact: "只要产品中文名、Amazon 站点和类目完整，就可以保存 Draft 并生成基础版 Listing。",
+    tips: ["资料少也可以生成基础版", "资料越真实，生成越准确", "英文名没有把握可以空着"],
   },
   {
     title: "把供应商资料变成买家语言",
-    score: "产品资料 82%",
-    impact: "影响五点描述、商品描述、图片建议和风险提醒。",
-    tips: ["尺寸和材质不要编造", "场景比形容词更重要", "注意事项会帮你避开夸大"],
+    score: "可选增强",
+    impact: "影响五点描述、商品描述、资料质量判断和缺失信息提醒。",
+    tips: ["尺寸和材质不要编造", "没有数据就留空", "禁止夸大的点会进入合规边界"],
   },
   {
     title: "从竞品里找机会",
-    score: "差异化 64%",
-    impact: "影响竞品分析、评论痛点、差异化卖点和 Listing 语气。",
-    tips: ["差评比好评更有价值", "竞品链接可后续再补", "差异化要能被图片证明"],
+    score: "运营加分项",
+    impact: "影响关键词模式、评论痛点、差异化机会和合规风险识别。",
+    tips: ["竞品 claim 不会变成我方事实", "差评比好评更有价值", "差异化要能被图片证明"],
   },
   {
     title: "控制最终输出风格",
@@ -87,7 +94,7 @@ const generationModules: Array<{
 }> = [
   {
     title: "产品分析",
-    desc: "卖点、用户、场景、差异化和风险提醒",
+    desc: "产品资料、缺失信息、保守推断和风险提醒",
     icon: Sparkles,
   },
   {
@@ -102,7 +109,7 @@ const generationModules: Array<{
   },
   {
     title: "描述与 FAQ",
-    desc: "Product Description 和买家常见问题",
+    desc: "Product Description、策略摘要和运营建议",
     icon: FileText,
   },
   {
@@ -112,7 +119,7 @@ const generationModules: Array<{
   },
   {
     title: "图片建议",
-    desc: "主图、场景图、尺寸图、细节图建议",
+    desc: "资料缺口、假设和下一步补充建议",
     icon: Image,
   },
 ];
@@ -388,32 +395,33 @@ function BasicInfoStep({ fieldProps }: StepProps) {
     <div className="space-y-7">
       <SectionHeader
         icon={<Sparkles className="size-4" />}
-        title="产品定位"
-        description="先让系统知道你卖什么、卖给谁、在哪个 Amazon 站点上架。"
+        title="基础必填"
+        description="只需要产品中文名、Amazon 站点和产品类目，就可以先保存 Draft。资料少也可以生成基础版 Listing，Work UP 会标注缺失信息和保守推断。"
       />
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="产品中文名称" hint="建议写到具体形态，不要只写“收纳用品”。">
+        <Field label="产品中文名称" hint="必填。建议写到具体形态，例如“行李箱”。">
           <Input {...fieldProps("product_name_cn")} />
         </Field>
         <Field label="产品英文名称" hint="不确定可以先空着，后续 AI 会生成更自然的英文名。" optional>
           <Input placeholder="可选：留空让 AI 生成" {...fieldProps("product_name_en")} />
         </Field>
-        <Field label="Amazon 站点" hint="第一阶段只做 Amazon，不做其他平台。">
+        <Field label="Amazon 站点" hint="必填。第一阶段只做 Amazon，不做其他平台。">
           <Select {...fieldProps("marketplace")}>
-          <option value="US">US</option>
-          <option value="UK">UK</option>
-          <option value="CA">CA</option>
-          <option value="AU">AU</option>
+            <option value="">请选择 Amazon 站点</option>
+            <option value="US">US</option>
+            <option value="UK">UK</option>
+            <option value="CA">CA</option>
+            <option value="AU">AU</option>
           </Select>
         </Field>
-        <Field label="产品类目">
+        <Field label="产品类目" hint="必填。可以先写 Amazon 大类目，例如 Travel & Luggage。">
           <Input {...fieldProps("category")} />
         </Field>
-        <Field label="目标售价" hint="用于判断文案语气，暂不做利润计算。">
+        <Field label="目标售价" hint="用于判断文案语气，暂不做利润计算。" optional>
           <Input {...fieldProps("target_price")} />
         </Field>
-        <Field label="目标用户" hint="写真实买家，例如学生、租房人群、车主、妈妈群体。">
-          <Input {...fieldProps("target_user")} />
+        <Field label="目标用户" hint="写真实买家，例如学生、差旅人群、车主、妈妈群体。" optional>
+          <Input {...fieldProps("target_customer")} />
         </Field>
       </div>
     </div>
@@ -425,38 +433,47 @@ function ProductMaterialStep({ fieldProps }: StepProps) {
     <div className="space-y-7">
       <SectionHeader
         icon={<ShieldCheck className="size-4" />}
-        title="真实产品资料"
-        description="这里的信息会直接影响英文是否准确。没有数据就留空，不要为了好看编参数。"
+        title="基础可选资料"
+        description="资料越真实，生成越准确。这里的信息会进入 Product Brief；没有数据就留空，不要为了好看编参数。"
       />
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="材质">
-          <Input {...fieldProps("material")} />
-        </Field>
-        <Field label="尺寸" hint="如果没有精确尺寸，可以先写“待补充”，结果页会提醒补资料。">
-          <Input placeholder="展开尺寸 / 折叠后尺寸" {...fieldProps("dimensions")} />
-        </Field>
-        <Field label="颜色">
+        <Field label="颜色" optional>
           <Input {...fieldProps("color")} />
         </Field>
-        <Field label="包装内容">
-          <Input {...fieldProps("package_contents")} />
+        <Field label="材质" optional>
+          <Input {...fieldProps("material")} />
         </Field>
-        <Field label="使用场景">
-          <Textarea {...fieldProps("usage_scenarios")} />
+        <Field label="尺寸" hint="如果没有精确尺寸，可以留空，结果页会提醒补资料。" optional>
+          <Input placeholder="例如 20 inch / 55 x 35 x 22 cm" {...fieldProps("dimensions")} />
         </Field>
-        <Field label="核心功能">
+        <Field label="尺码 / 规格" hint="适合行李箱等有 20 inch、24 inch 规格的产品。" optional>
+          <Input {...fieldProps("size")} />
+        </Field>
+        <Field label="重量" optional>
+          <Input placeholder="例如 6.2 lb" {...fieldProps("weight")} />
+        </Field>
+        <Field label="容量" optional>
+          <Input placeholder="例如 38 L" {...fieldProps("capacity")} />
+        </Field>
+        <Field label="包装数量" optional>
+          <Input placeholder="例如 1 pack / 2 pack" {...fieldProps("package_quantity")} />
+        </Field>
+        <Field label="使用场景" optional>
+          <Textarea {...fieldProps("use_cases")} />
+        </Field>
+        <Field label="核心卖点" optional>
           <Textarea {...fieldProps("core_features")} />
         </Field>
-      <div className="md:col-span-2">
-        <Field label="供应商给的中文描述">
-          <Textarea {...fieldProps("supplier_description")} />
-        </Field>
-      </div>
-      <div className="md:col-span-2">
-        <Field label="注意事项" hint="这些限制会帮助 Listing 避免夸大、虚假承诺和售后风险。" optional>
-          <Textarea placeholder="例如：不适合高温环境，不建议承载过重物品。" {...fieldProps("notes")} />
-        </Field>
-      </div>
+        <div className="md:col-span-2">
+          <Field label="供应商中文描述" optional>
+            <Textarea {...fieldProps("supplier_description")} />
+          </Field>
+        </div>
+        <div className="md:col-span-2">
+          <Field label="禁止夸大的点" hint="例如：不要写 waterproof、airline approved、lifetime warranty。" optional>
+            <Textarea {...fieldProps("prohibited_claims")} />
+          </Field>
+        </div>
       </div>
     </div>
   );
@@ -467,23 +484,23 @@ function CompetitorStep({ fieldProps }: StepProps) {
     <div className="space-y-7">
       <SectionHeader
         icon={<CircleHelp className="size-4" />}
-        title="竞品和评论线索"
-        description="不用做复杂调研，先粘贴你看过的竞品标题、差评和自己想强调的差异点。"
+        title="进阶运营资料 / 竞品资料"
+        description="如果你提供竞品标题、五点和评论痛点，Work UP 会分析关键词、卖点机会和合规风险。竞品资料只作为洞察来源，不会被写成我方 confirmed fact。"
       />
       <div className="grid gap-5">
-        <Field label="竞品标题" hint="可以粘贴 1-3 个竞品标题，系统会拆解常见关键词和表达方式。">
+        <Field label="竞品标题" hint="可以粘贴 1-3 个竞品标题，系统会拆解常见关键词和表达方式。" optional>
           <Textarea {...fieldProps("competitor_title")} />
         </Field>
         <Field label="竞品链接" optional>
           <Input placeholder="https://www.amazon.com/..." {...fieldProps("competitor_url")} />
         </Field>
-        <Field label="竞品卖点" hint="例如竞品五点、A+ 页面文案、你观察到的主图卖点。" optional>
+        <Field label="竞品五点" hint="例如竞品 Bullet Points、A+ 页面文案、你观察到的主图卖点。" optional>
           <Textarea placeholder="粘贴竞品五点或你观察到的卖点。" {...fieldProps("competitor_selling_points")} />
         </Field>
-        <Field label="用户差评或评论内容" hint="差评能帮助系统写出更贴近买家痛点的 Bullet。">
+        <Field label="评论痛点" hint="差评能帮助系统写出更贴近买家痛点的 Bullet。" optional>
           <Textarea {...fieldProps("review_pain_points")} />
         </Field>
-        <Field label="自己想突出的差异化" hint="请写能被产品、图片或参数证明的差异点。">
+        <Field label="我方差异化" hint="请写能被产品、图片或参数证明的差异点。" optional>
           <Textarea {...fieldProps("differentiation")} />
         </Field>
       </div>
@@ -510,7 +527,7 @@ function GenerationSettingsStep({
       <SectionHeader
         icon={<Sparkles className="size-4" />}
         title="输出偏好"
-        description="这些设置会随真实产品资料一起进入 DeepSeek 提示词，用来控制最终 Listing 输出。"
+        description="这些设置会随原始 Draft 一起保存。低信息输入不会被阻止，Work UP 会用保守策略生成并提示你补资料。"
       />
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="英文风格" hint="新手默认推荐自然本地化，英文更像真实 Amazon 卖家写法。">

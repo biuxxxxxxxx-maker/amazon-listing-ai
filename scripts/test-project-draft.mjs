@@ -14,45 +14,146 @@ const mod = await import(
   `data:text/javascript;base64,${Buffer.from(output.outputText).toString("base64")}`
 );
 
-const formData = new FormData();
-formData.set("product_name_cn", "便携式折叠收纳篮");
-formData.set("product_name_en", "Collapsible Storage Basket");
-formData.set("marketplace", "US");
-formData.set("category", "Home & Kitchen");
-formData.set("target_price", "$19.99");
-formData.set("target_user", "小户型家庭、宿舍用户、车主");
-formData.set("material", "PP + TPR");
-formData.set("dimensions", "待补充");
-formData.set("color", "米白色、灰色");
-formData.set("package_contents", "1 个折叠收纳篮");
-formData.set("usage_scenarios", "洗衣房、衣柜、汽车后备箱");
-formData.set("core_features", "可折叠收纳，双侧提手");
-formData.set("supplier_description", "适合家庭多场景使用。");
-formData.set("notes", "不建议承载过重物品。");
-formData.set("competitor_title", "Collapsible Laundry Basket with Handles");
-formData.set("competitor_url", "https://www.amazon.com/example");
-formData.set("competitor_selling_points", "Foldable, easy carry");
-formData.set("review_pain_points", "Hard to keep upright");
-formData.set("differentiation", "折叠后更薄");
-formData.set("english_style", "localized");
-formData.set("language", "English");
-formData.set("needs_chinese_explanation", "on");
-formData.set("needs_image_suggestions", "on");
+function makeFormData(entries) {
+  const formData = new FormData();
 
-const payload = mod.buildProjectDraftPayload(formData, "user-123");
+  for (const [key, value] of Object.entries(entries)) {
+    formData.set(key, value);
+  }
 
-assert.equal(payload.user_id, "user-123");
-assert.equal(payload.product_name_cn, "便携式折叠收纳篮");
-assert.equal(payload.product_name_en, "Collapsible Storage Basket");
-assert.equal(payload.marketplace, "US");
-assert.equal(payload.status, "Draft");
-assert.equal(payload.form_data.material, "PP + TPR");
-assert.equal(payload.form_data.needs_chinese_explanation, true);
-assert.equal(payload.form_data.needs_image_suggestions, true);
+  return formData;
+}
+
+const lowInfoPayload = mod.buildProjectDraftPayload(
+  makeFormData({
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+  }),
+  "user-123",
+);
+
+assert.equal(lowInfoPayload.user_id, "user-123");
+assert.equal(lowInfoPayload.product_name_cn, "行李箱");
+assert.equal(lowInfoPayload.product_name_en, null);
+assert.equal(lowInfoPayload.marketplace, "US");
+assert.equal(lowInfoPayload.category, "Travel & Luggage");
+assert.equal(lowInfoPayload.target_customer, null);
+assert.equal(lowInfoPayload.status, "Draft");
+assert.equal(lowInfoPayload.form_data.product_name_cn, "行李箱");
+assert.equal(lowInfoPayload.form_data.marketplace, "US");
+assert.equal(lowInfoPayload.form_data.category, "Travel & Luggage");
+assert.equal(lowInfoPayload.form_data.color, null);
+assert.equal(lowInfoPayload.form_data.material, null);
+assert.doesNotMatch(JSON.stringify(lowInfoPayload), /便携式折叠收纳篮|Collapsible Storage Basket|Home & Kitchen|\$19\.99/);
+
+const richPayload = mod.buildProjectDraftPayload(
+  makeFormData({
+    product_name_cn: "行李箱",
+    product_name_en: "Carry On Suitcase",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    color: "黑色",
+    material: "ABS",
+    dimensions: "55 x 35 x 22 cm",
+    size: "20 inch",
+    weight: "6.2 lb",
+    capacity: "38 L",
+    package_quantity: "1 pack",
+    target_customer: "差旅人群",
+    use_cases: "商务出差、周末旅行",
+    core_features: "轻便箱体、内部收纳分区",
+    supplier_description: "供应商描述：ABS 箱体，适合短途旅行。",
+    prohibited_claims: "不要写 waterproof 或 airline approved。",
+    competitor_title: "Carry On Luggage with Spinner Wheels",
+    competitor_url: "https://www.amazon.com/example",
+    competitor_selling_points: "TSA Lock and expandable design",
+    review_pain_points: "zipper issue",
+    differentiation: "黑色 ABS 箱体，适合基础旅行需求",
+    needs_chinese_explanation: "on",
+  }),
+  "user-456",
+);
+
+assert.equal(richPayload.product_name_en, "Carry On Suitcase");
+assert.equal(richPayload.target_customer, "差旅人群");
+assert.equal(richPayload.form_data.color, "黑色");
+assert.equal(richPayload.form_data.material, "ABS");
+assert.equal(richPayload.form_data.dimensions, "55 x 35 x 22 cm");
+assert.equal(richPayload.form_data.size, "20 inch");
+assert.equal(richPayload.form_data.weight, "6.2 lb");
+assert.equal(richPayload.form_data.capacity, "38 L");
+assert.equal(richPayload.form_data.package_quantity, "1 pack");
+assert.equal(richPayload.form_data.package_contents, "1 pack");
+assert.equal(richPayload.form_data.target_customer, "差旅人群");
+assert.equal(richPayload.form_data.target_user, "差旅人群");
+assert.equal(richPayload.form_data.use_cases, "商务出差、周末旅行");
+assert.equal(richPayload.form_data.usage_scenarios, "商务出差、周末旅行");
+assert.equal(richPayload.form_data.core_features, "轻便箱体、内部收纳分区");
+assert.equal(richPayload.form_data.supplier_description, "供应商描述：ABS 箱体，适合短途旅行。");
+assert.equal(richPayload.form_data.prohibited_claims, "不要写 waterproof 或 airline approved。");
+assert.equal(richPayload.form_data.competitor_title, "Carry On Luggage with Spinner Wheels");
+assert.equal(richPayload.form_data.competitor_url, "https://www.amazon.com/example");
+assert.equal(richPayload.form_data.competitor_selling_points, "TSA Lock and expandable design");
+assert.equal(richPayload.form_data.review_pain_points, "zipper issue");
+assert.equal(richPayload.form_data.differentiation, "黑色 ABS 箱体，适合基础旅行需求");
+assert.equal(richPayload.form_data.needs_chinese_explanation, true);
+assert.equal(richPayload.form_data.needs_image_suggestions, false);
+assert.equal(richPayload.form_data.productBrief, undefined);
+assert.equal(richPayload.form_data.listingStrategy, undefined);
+assert.equal(richPayload.form_data.generationResult, undefined);
 
 assert.throws(
-  () => mod.buildProjectDraftPayload(new FormData(), "user-123"),
+  () =>
+    mod.buildProjectDraftPayload(
+      makeFormData({ marketplace: "US", category: "Travel & Luggage" }),
+      "user-123",
+    ),
   /产品中文名称/,
+);
+
+assert.throws(
+  () =>
+    mod.buildProjectDraftPayload(
+      makeFormData({ product_name_cn: "行李箱", category: "Travel & Luggage" }),
+      "user-123",
+    ),
+  /Amazon 站点/,
+);
+
+assert.throws(
+  () =>
+    mod.buildProjectDraftPayload(
+      makeFormData({ product_name_cn: "行李箱", marketplace: "US" }),
+      "user-123",
+    ),
+  /产品类目/,
+);
+
+const optionalEmptyPayload = mod.buildProjectDraftPayload(
+  makeFormData({
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    color: "",
+    material: "",
+    competitor_title: "",
+  }),
+  "user-123",
+);
+
+assert.equal(optionalEmptyPayload.form_data.color, null);
+assert.equal(optionalEmptyPayload.form_data.material, null);
+assert.equal(optionalEmptyPayload.form_data.competitor_title, null);
+assert.doesNotThrow(() =>
+  mod.buildProjectDraftPayload(
+    makeFormData({
+      product_name_cn: "行李箱",
+      marketplace: "US",
+      category: "Travel & Luggage",
+    }),
+    "user-123",
+  ),
 );
 
 console.log("project draft payload tests passed");

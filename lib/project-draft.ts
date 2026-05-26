@@ -16,14 +16,21 @@ const textFields = [
   "marketplace",
   "category",
   "target_price",
+  "target_customer",
   "target_user",
   "material",
   "dimensions",
+  "size",
+  "weight",
+  "capacity",
   "color",
+  "package_quantity",
   "package_contents",
+  "use_cases",
   "usage_scenarios",
   "core_features",
   "supplier_description",
+  "prohibited_claims",
   "notes",
   "competitor_title",
   "competitor_url",
@@ -43,16 +50,32 @@ function optional(value: string) {
   return value.length > 0 ? value : null;
 }
 
+function firstText(formData: FormData, fields: Array<(typeof textFields)[number]>) {
+  for (const field of fields) {
+    const value = getText(formData, field);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
 export function buildProjectDraftPayload(
   formData: FormData,
   userId: string,
 ): ProductProjectInsert {
   const productNameCn = getText(formData, "product_name_cn");
-  const marketplace = getText(formData, "marketplace") || "US";
+  const marketplace = getText(formData, "marketplace");
   const category = getText(formData, "category");
 
   if (!productNameCn) {
     throw new Error("产品中文名称不能为空");
+  }
+
+  if (!marketplace) {
+    throw new Error("Amazon 站点不能为空");
   }
 
   if (!category) {
@@ -65,6 +88,16 @@ export function buildProjectDraftPayload(
     snapshot[field] = optional(getText(formData, field));
   }
 
+  const targetCustomer = firstText(formData, ["target_customer", "target_user"]);
+  const packageQuantity = firstText(formData, ["package_quantity", "package_contents"]);
+  const useCases = firstText(formData, ["use_cases", "usage_scenarios"]);
+
+  snapshot.target_customer = optional(targetCustomer);
+  snapshot.target_user = optional(targetCustomer);
+  snapshot.package_quantity = optional(packageQuantity);
+  snapshot.package_contents = optional(packageQuantity);
+  snapshot.use_cases = optional(useCases);
+  snapshot.usage_scenarios = optional(useCases);
   snapshot.needs_chinese_explanation = formData.get("needs_chinese_explanation") === "on";
   snapshot.needs_image_suggestions = formData.get("needs_image_suggestions") === "on";
 
@@ -75,7 +108,7 @@ export function buildProjectDraftPayload(
     marketplace,
     category,
     target_price: optional(getText(formData, "target_price")),
-    target_customer: optional(getText(formData, "target_user")),
+    target_customer: optional(targetCustomer),
     form_data: snapshot,
     status: "Draft",
   };
