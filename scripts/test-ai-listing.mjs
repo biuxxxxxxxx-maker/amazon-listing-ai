@@ -2,59 +2,106 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
-const source = await readFile(new URL("../lib/ai-listing.ts", import.meta.url), "utf8");
-const output = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2022,
-  },
-});
+function transpile(source) {
+  return ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+}
 
-const exports = {};
-const cjsModule = { exports };
-const envValues = new Map();
-const require = (specifier) => {
-  if (specifier.includes("amazon-listing-user-prompt")) {
+function loadModule(source, require = () => {
+  throw new Error("Unexpected require");
+}) {
+  const exports = {};
+  const cjsModule = { exports };
+
+  new Function("exports", "module", "require", transpile(source))(exports, cjsModule, require);
+
+  return cjsModule.exports;
+}
+
+const sourceMap = new Map();
+
+for (const path of [
+  "../lib/product-brief.ts",
+  "../lib/competitor-insights.ts",
+  "../lib/listing-strategy.ts",
+  "../lib/listing-prompt.ts",
+  "../lib/generation-result-validation.ts",
+  "../lib/ai-listing.ts",
+]) {
+  sourceMap.set(path, await readFile(new URL(path, import.meta.url), "utf8"));
+}
+
+const productBriefModule = loadModule(sourceMap.get("../lib/product-brief.ts"));
+const competitorInsightsModule = loadModule(sourceMap.get("../lib/competitor-insights.ts"));
+const listingStrategyModule = loadModule(sourceMap.get("../lib/listing-strategy.ts"));
+const listingPromptModule = loadModule(sourceMap.get("../lib/listing-prompt.ts"));
+const validationModule = loadModule(sourceMap.get("../lib/generation-result-validation.ts"));
+const envValues = new Map([
+  ["AI_PROVIDER", "deepseek"],
+  ["DEEPSEEK_API_KEY", "sk-deepseek-test-valid-format-key"],
+  ["DEEPSEEK_MODEL", "deepseek-chat"],
+]);
+const calls = {
+  buildProductBrief: 0,
+  analyzeCompetitorInput: 0,
+  buildListingStrategy: 0,
+  buildListingPrompt: 0,
+};
+let lastPromptContext = null;
+let lastRequestBody = null;
+
+function requireForAiListing(specifier) {
+  if (specifier.includes("product-brief")) {
     return {
-      amazonListingUserPromptTemplate: "Project data:\n{{PROJECT_JSON}}",
-    };
-  }
-
-  if (specifier.includes("amazon-listing-system-prompt")) {
-    return { amazonListingSystemPrompt: "system" };
-  }
-
-  if (specifier.includes("mock-generation-result")) {
-    return {
-      mockGenerationResult: {
-        source: "mock",
-        product: { nameCn: "Mock 产品" },
-        description: { english: "Mock description", chinese: "Mock 描述" },
+      ...productBriefModule,
+      buildProductBrief: (...args) => {
+        calls.buildProductBrief += 1;
+        return productBriefModule.buildProductBrief(...args);
       },
-      normalizeGenerationResult: (value, context = {}) => ({
-        source: "deepseek",
-        product: { nameCn: context.product_name_cn || context.productName || "Mock 产品" },
-        title:
-          typeof value.title === "string"
-            ? { english: value.title, chinese: value.title_cn }
-            : value.title,
-        bullets: Array.isArray(value.bullet_points)
-          ? value.bullet_points.map((item) => ({
-              english: item.en,
-              chinese: item.cn,
-            }))
-          : [],
-        description: value.description?.en
-          ? { english: value.description.en, chinese: value.description.cn }
-          : { english: "Mock description", chinese: "Mock 描述" },
-        searchTerms: {
-          english: Array.isArray(value.search_terms) ? value.search_terms.join(" ") : "",
-          chinese: "",
-        },
-        copyReadyListing:
-          typeof value.title === "string" ? value.title : value.copyReadyListing || "",
-      }),
     };
+  }
+
+  if (specifier.includes("competitor-insights")) {
+    return {
+      ...competitorInsightsModule,
+      analyzeCompetitorInput: (...args) => {
+        calls.analyzeCompetitorInput += 1;
+        return competitorInsightsModule.analyzeCompetitorInput(...args);
+      },
+    };
+  }
+
+  if (specifier.includes("listing-strategy")) {
+    return {
+      ...listingStrategyModule,
+      buildListingStrategy: (...args) => {
+        calls.buildListingStrategy += 1;
+        return listingStrategyModule.buildListingStrategy(...args);
+      },
+    };
+  }
+
+  if (specifier.includes("listing-prompt")) {
+    return {
+      ...listingPromptModule,
+      buildListingPrompt: (productBrief, competitorInsights, listingStrategy) => {
+        calls.buildListingPrompt += 1;
+        lastPromptContext = { productBrief, competitorInsights, listingStrategy };
+        return listingPromptModule.buildListingPrompt(
+          productBrief,
+          competitorInsights,
+          listingStrategy,
+        );
+      },
+    };
+  }
+
+  if (specifier.includes("generation-result-validation")) {
+    return validationModule;
   }
 
   if (specifier.includes("cloudflare-env")) {
@@ -62,76 +109,116 @@ const require = (specifier) => {
   }
 
   throw new Error(`Unexpected require: ${specifier}`);
-};
+}
 
-new Function("exports", "module", "require", output.outputText)(exports, cjsModule, require);
+const aiListingModule = loadModule(sourceMap.get("../lib/ai-listing.ts"), requireForAiListing);
 
-const prompt = cjsModule.exports.buildListingUserPrompt({
-  product_name_cn: "真实项目产品",
-  form_data: {
-    material: "PP + TPR",
-    differentiation: "折叠后更薄",
-  },
-});
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
-assert.ok(prompt.includes("真实项目产品"));
-assert.ok(prompt.includes("PP + TPR"));
-assert.ok(prompt.includes("折叠后更薄"));
+function createValidResult(context, overrides = {}) {
+  const base = {
+    schemaVersion: "workup.v1",
+    source: "deepseek",
+    generatedAt: "2026-05-26T00:00:00.000Z",
+    model: "deepseek-chat",
+    qualityScore: {
+      overall: 76,
+      level: "good",
+      dimensions: {
+        inputCompleteness: 45,
+        keywordRelevance: 82,
+        complianceSafety: 92,
+        amazonReadiness: 76,
+        copyClarity: 84,
+      },
+      summary: "基于低信息输入生成保守版本。",
+    },
+    productBrief: context.productBrief,
+    competitorInsights: context.competitorInsights,
+    listingStrategy: context.listingStrategy,
+    finalListing: {
+      title: {
+        english: "Black ABS Hard Shell Suitcase for Practical Travel Use",
+        chineseExplanation: "标题基于黑色、ABS 和行李箱类目。",
+      },
+      bulletPoints: [
+        {
+          english: "ABS shell positioning uses the confirmed material without adding unsupported claims.",
+          chineseExplanation: "基于已确认材质。",
+          sourceBasis: "confirmed_fact",
+          evidenceFields: ["material"],
+        },
+        {
+          english: "Black color gives the suitcase a clean, easy-to-match travel look.",
+          chineseExplanation: "基于已确认颜色。",
+          sourceBasis: "confirmed_fact",
+          evidenceFields: ["color"],
+        },
+        {
+          english: "Travel-focused copy keeps the use case clear while avoiding unverified size details.",
+          chineseExplanation: "保守表达旅行用途。",
+          sourceBasis: "safe_inference",
+          evidenceFields: ["category"],
+        },
+        {
+          english: "Practical wording answers buyer needs without copying competitor feature claims.",
+          chineseExplanation: "竞品只作参考。",
+          sourceBasis: "competitor_inspired",
+          evidenceFields: ["competitorInsights.buyerPainPoints"],
+        },
+        {
+          english: "Compliance-safe language avoids promises that need separate proof.",
+          chineseExplanation: "避免高风险承诺。",
+          sourceBasis: "safe_inference",
+          evidenceFields: ["avoidClaims"],
+        },
+      ],
+      description: {
+        english:
+          "This black ABS suitcase listing is built from confirmed product facts and conservative Work UP strategy.",
+        chineseExplanation: "描述不编造参数。",
+      },
+      searchTerms: {
+        english: "black suitcase abs luggage hard shell travel suitcase",
+        chineseExplanation: "后台词只包含安全关键词。",
+      },
+    },
+    complianceNotes: [],
+    missingInfo: context.productBrief.missingInfo,
+    assumptions: [],
+    improvementSuggestions: [],
+    analysis: {
+      productSummary: "行李箱，黑色，ABS。",
+      strategySummary: "使用安全关键词和保守卖点。",
+      competitorSummary: "竞品信息不直接进入最终文案。",
+      complianceSummary: "避免未确认 claim。",
+      beginnerExplanation: "资料少也可以生成基础版本。",
+    },
+  };
 
-envValues.set("DEEPSEEK_API_KEY", "your-deepseek-api-key");
-let fetchWasCalled = false;
-global.fetch = async () => {
-  fetchWasCalled = true;
-  throw new Error("Invalid key should not call DeepSeek");
-};
+  return { ...base, ...overrides };
+}
 
-const invalidKeyResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "无效 DeepSeek key 测试产品" },
-});
-
-assert.equal(invalidKeyResult.source, "mock");
-assert.equal(invalidKeyResult.model, "mock-local");
-assert.equal(fetchWasCalled, false);
-assert.match(invalidKeyResult.fallbackReason, /API key|mock/);
-assert.match(invalidKeyResult.fallbackReason, /演示模式/);
-
-envValues.set("DEEPSEEK_API_KEY", "sk-deepseek-test-valid-format-key");
-envValues.set("AI_PROVIDER", "deepseek");
-envValues.set("DEEPSEEK_MODEL", "deepseek-chat");
 global.fetch = async (url, init) => {
   assert.equal(url, "https://api.deepseek.com/chat/completions");
-  const body = JSON.parse(init.body);
+  lastRequestBody = JSON.parse(init.body);
 
-  assert.equal(body.model, "deepseek-chat");
-  assert.equal(body.response_format.type, "json_object");
-  assert.equal(body.messages[0].role, "system");
-  assert.equal(body.messages[1].role, "user");
-  assert.match(body.messages[0].content, /bullet_points/);
-  assert.match(body.messages[0].content, /keyword_suggestions/);
-  assert.match(body.messages[0].content, /image_suggestions/);
-  assert.match(body.messages[1].content, /DeepSeek 成功测试产品/);
+  assert.equal(lastRequestBody.model, "deepseek-chat");
+  assert.equal(lastRequestBody.response_format.type, "json_object");
+  assert.match(lastRequestBody.messages[0].content, /Work UP/);
+  assert.match(lastRequestBody.messages[1].content, /行李箱/);
+  assert.match(lastRequestBody.messages[1].content, /Travel & Luggage/);
+  assert.match(lastRequestBody.messages[1].content, /黑色/);
+  assert.match(lastRequestBody.messages[1].content, /ABS/);
 
   return new Response(
     JSON.stringify({
       choices: [
         {
           message: {
-            content: JSON.stringify({
-              title: "DeepSeek Test Product",
-              title_cn: "DeepSeek 测试产品",
-              bullet_points: [
-                { en: "Benefit one for Amazon shoppers.", cn: "卖点一说明。" },
-                { en: "Benefit two for Amazon shoppers.", cn: "卖点二说明。" },
-                { en: "Benefit three for Amazon shoppers.", cn: "卖点三说明。" },
-                { en: "Benefit four for Amazon shoppers.", cn: "卖点四说明。" },
-                { en: "Benefit five for Amazon shoppers.", cn: "卖点五说明。" },
-              ],
-              description: { en: "Description", cn: "描述" },
-              search_terms: ["keyword", "storage basket"],
-              keyword_suggestions: [{ keyword: "storage basket", reason_cn: "符合收纳场景。" }],
-              image_suggestions: [{ scene: "Show the basket in a laundry room.", cn: "展示洗衣房使用场景。" }],
-            }),
+            content: JSON.stringify(createValidResult(lastPromptContext)),
           },
         },
       ],
@@ -140,91 +227,143 @@ global.fetch = async (url, init) => {
   );
 };
 
-const deepSeekResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "DeepSeek 成功测试产品" },
+const lowInfoGeneration = await aiListingModule.generateAmazonListing({
+  projectId: "project-low-info",
+  userId: "user-1",
+  projectData: {
+    id: "project-low-info",
+    user_id: "user-1",
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    form_data: {
+      color: "黑色",
+      material: "ABS",
+    },
+  },
 });
 
-assert.equal(deepSeekResult.source, "deepseek");
-assert.equal(deepSeekResult.model, "deepseek-chat");
-assert.equal(deepSeekResult.result.product.nameCn, "DeepSeek 成功测试产品");
-assert.equal(deepSeekResult.result.title.english, "DeepSeek Test Product");
-assert.equal(deepSeekResult.result.title.chinese, "DeepSeek 测试产品");
-assert.equal(deepSeekResult.result.bullets[0].english, "Benefit one for Amazon shoppers.");
-assert.match(deepSeekResult.result.searchTerms.english, /storage basket/);
-assert.match(deepSeekResult.result.copyReadyListing, /DeepSeek Test Product/);
+assert.equal(lowInfoGeneration.ok, true);
+assert.equal(lowInfoGeneration.source, "deepseek");
+assert.equal(lowInfoGeneration.promptVersion, "workup-listing-v1");
+assert.equal(calls.buildProductBrief, 1);
+assert.equal(calls.analyzeCompetitorInput, 1);
+assert.equal(calls.buildListingStrategy, 1);
+assert.equal(calls.buildListingPrompt, 1);
+assert.equal(lowInfoGeneration.inputSnapshot.productBrief.product.nameCn, "行李箱");
+assert.equal(lowInfoGeneration.inputSnapshot.productBrief.product.category, "Travel & Luggage");
+assert.equal(lowInfoGeneration.inputSnapshot.productBrief.product.marketplace, "US");
+assert.equal(lowInfoGeneration.inputSnapshot.projectSnapshot.formData.color, "黑色");
+assert.equal(lowInfoGeneration.inputSnapshot.projectSnapshot.formData.material, "ABS");
+assert.ok(lowInfoGeneration.inputSnapshot.competitorInsights);
+assert.ok(lowInfoGeneration.inputSnapshot.listingStrategy);
+assert.ok(lastRequestBody.messages[1].content.includes("productBrief"));
+
+const fencedJson = `\`\`\`json\n${JSON.stringify(createValidResult(lastPromptContext))}\n\`\`\``;
+assert.equal(aiListingModule.parseDeepSeekJsonResponse(fencedJson).source, "deepseek");
+assert.throws(
+  () => aiListingModule.parseDeepSeekJsonResponse("这里不是 JSON，只是一段普通文本。"),
+  /非 JSON/,
+);
 
 global.fetch = async () =>
   new Response(
     JSON.stringify({
-      choices: [
-        {
-          message: {
-            content:
-              "```json\n{\"title\":\"Code Fence Product\",\"title_cn\":\"代码块产品\",\"bullet_points\":[{\"en\":\"Bullet\",\"cn\":\"要点\"}],\"description\":{\"en\":\"Description\",\"cn\":\"描述\"},\"search_terms\":[\"keyword\"],\"keyword_suggestions\":[],\"image_suggestions\":[]}\n```",
-          },
-        },
-      ],
+      choices: [{ message: { content: "plain text, not json" } }],
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );
 
-const fencedJsonResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "代码块 JSON 产品" },
-});
-
-assert.equal(fencedJsonResult.source, "deepseek");
-assert.equal(fencedJsonResult.result.product.nameCn, "代码块 JSON 产品");
-assert.ok(fencedJsonResult.result.description.english);
-
-global.fetch = async () =>
-  new Response(
-    JSON.stringify({
-      choices: [{ message: { content: "这里不是 JSON，只是一段普通文本。" } }],
-    }),
-    { status: 200, headers: { "content-type": "application/json" } },
-  );
-
-const textFallbackResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "普通文本回退测试产品" },
-});
-
-assert.equal(textFallbackResult.source, "mock");
-assert.match(textFallbackResult.fallbackReason, /JSON|mock/);
-
-global.fetch = async () =>
-  new Response(
-    JSON.stringify({
-      error: {
-        message: "Insufficient balance.",
+await assert.rejects(
+  () =>
+    aiListingModule.generateAmazonListing({
+      projectId: "project-non-json",
+      userId: "user-1",
+      projectData: {
+        product_name_cn: "行李箱",
+        marketplace: "US",
+        category: "Travel & Luggage",
+        form_data: { color: "黑色", material: "ABS" },
       },
     }),
-    { status: 429, headers: { "content-type": "application/json" } },
-  );
+  /非 JSON/,
+);
 
-const quotaFallbackResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "无 API 额度测试产品" },
-});
-
-assert.equal(quotaFallbackResult.source, "mock");
-assert.equal(quotaFallbackResult.model, "mock-local");
-assert.match(quotaFallbackResult.fallbackReason, /余额|额度|mock/);
-
-envValues.set("DEEPSEEK_API_KEY", "sk-deepseek-test-valid-format-key");
 global.fetch = async () => {
-  throw new Error("network reconnect");
+  const mockSourceResult = createValidResult(lastPromptContext, { source: "mock" });
+
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(mockSourceResult) } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
 };
 
-const fallbackResult = await cjsModule.exports.generateAmazonListing({
-  projectId: "demo",
-  projectData: { product_name_cn: "网络失败测试产品" },
-});
+await assert.rejects(
+  () =>
+    aiListingModule.generateAmazonListing({
+      projectId: "project-source-mock",
+      userId: "user-1",
+      projectData: {
+        product_name_cn: "行李箱",
+        marketplace: "US",
+        category: "Travel & Luggage",
+        form_data: { color: "黑色", material: "ABS" },
+      },
+    }),
+  /source/,
+);
 
-assert.equal(fallbackResult.source, "mock");
-assert.equal(fallbackResult.model, "mock-local");
-assert.match(fallbackResult.fallbackReason, /连接失败|超时/);
+global.fetch = async () => {
+  const blockedClaimResult = clone(createValidResult(lastPromptContext));
+  blockedClaimResult.finalListing.title.english =
+    "Black ABS Suitcase with TSA Lock for Travel";
 
-console.log("DeepSeek listing prompt tests passed");
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(blockedClaimResult) } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+};
+
+await assert.rejects(
+  () =>
+    aiListingModule.generateAmazonListing({
+      projectId: "project-blocked-claim",
+      userId: "user-1",
+      projectData: {
+        product_name_cn: "行李箱",
+        marketplace: "US",
+        category: "Travel & Luggage",
+        form_data: {
+          color: "黑色",
+          material: "ABS",
+          competitor_title: "Carry On Luggage with TSA Lock",
+        },
+      },
+    }),
+  /TSA lock/,
+);
+
+envValues.set("DEEPSEEK_API_KEY", "");
+global.fetch = async () => {
+  throw new Error("fetch should not be called without a usable key");
+};
+
+await assert.rejects(
+  () =>
+    aiListingModule.generateAmazonListing({
+      projectId: "project-no-key",
+      userId: "user-1",
+      projectData: {
+        product_name_cn: "行李箱",
+        marketplace: "US",
+        category: "Travel & Luggage",
+        form_data: { color: "黑色", material: "ABS" },
+      },
+    }),
+  /fallback mock/,
+);
+
+assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("mock-generation-result"));
+assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("normalizeGenerationResult"));
+
+console.log("DeepSeek Work UP generation tests passed");

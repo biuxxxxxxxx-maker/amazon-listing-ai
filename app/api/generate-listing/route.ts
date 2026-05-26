@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { generateAmazonListing, isGenerationMockEnabled, readAIProvider } from "@/lib/ai-listing";
+import {
+  buildProductBriefInputFromProject,
+  buildWorkUpGenerationContext,
+  generateListingWithDeepSeek,
+  isGenerationMockEnabled,
+  readAIProvider,
+} from "@/lib/ai-listing";
 import { readServerEnv } from "@/lib/cloudflare-env";
 import { shouldUseSupabaseGenerationAuth } from "@/lib/generation-auth";
 import {
@@ -43,21 +49,31 @@ function buildProjectDataFromBody(body: Record<string, unknown>) {
 }
 
 function readProjectLogFields(projectData: unknown) {
-  if (!isRecord(projectData)) {
+  try {
+    const productBriefInput = buildProductBriefInputFromProject(projectData);
+
     return {
-      productName: "",
-      category: "",
-      marketplace: "",
+      productName: productBriefInput.productNameCn,
+      category: productBriefInput.category,
+      marketplace: productBriefInput.marketplace,
+    };
+  } catch {
+    if (!isRecord(projectData)) {
+      return {
+        productName: "",
+        category: "",
+        marketplace: "",
+      };
+    }
+
+    return {
+      productName:
+        getBodyText(projectData, "product_name_cn") ||
+        getBodyText(projectData, "productName"),
+      category: getBodyText(projectData, "category"),
+      marketplace: getBodyText(projectData, "marketplace"),
     };
   }
-
-  return {
-    productName:
-      getBodyText(projectData, "product_name_cn") ||
-      getBodyText(projectData, "productName"),
-    category: getBodyText(projectData, "category"),
-    marketplace: getBodyText(projectData, "marketplace"),
-  };
 }
 
 export async function POST(request: Request) {
@@ -66,17 +82,29 @@ export async function POST(request: Request) {
     const body = isRecord(rawBody) ? rawBody : {};
     const projectId = typeof body.projectId === "string" ? body.projectId : undefined;
     let projectData = buildProjectDataFromBody(body);
+    let userId = "";
     const requiresProjectAuth = shouldUseSupabaseGenerationAuth({
       projectId: projectId || "",
       supabaseReady: true,
     });
-    const allowMockFallback = await isGenerationMockEnabled();
+    const allowDevelopmentMock =
+      (await isGenerationMockEnabled()) && process.env.NODE_ENV !== "production";
 
     if (!requiresProjectAuth) {
-      const generation = await generateAmazonListing({
-        projectId,
+      const context = buildWorkUpGenerationContext({
+        projectId: projectId || "demo",
+        userId,
         projectData,
-        allowMockFallback,
+      });
+      const generation = await generateListingWithDeepSeek({
+        projectId,
+        userId,
+        productBrief: context.productBrief,
+        competitorInsights: context.competitorInsights,
+        listingStrategy: context.listingStrategy,
+        inputSnapshot: context.inputSnapshot,
+        prompt: context.prompt,
+        allowDevelopmentMock,
       });
 
       return NextResponse.json(generation);
@@ -87,7 +115,7 @@ export async function POST(request: Request) {
 
       if (!accessToken) {
         return NextResponse.json(
-          { error: "请先登录后再生成 Listing。" },
+          { ok: false, error: "请先登录后再生成 Listing。" },
           { status: 401 },
         );
       }
@@ -97,10 +125,12 @@ export async function POST(request: Request) {
 
       if (userError || !userData.user) {
         return NextResponse.json(
-          { error: "登录状态已失效，请重新登录。" },
+          { ok: false, error: "登录状态已失效，请重新登录。" },
           { status: 401 },
         );
       }
+
+      userId = userData.user.id;
 
       if (projectId && projectId !== "demo") {
         const { data: project, error: projectError } = await supabase
@@ -115,7 +145,7 @@ export async function POST(request: Request) {
 
         if (!project) {
           return NextResponse.json(
-            { error: "没有找到这个项目，或当前账号无权访问。" },
+            { ok: false, error: "没有找到这个项目，或当前账号无权访问。" },
             { status: 404 },
           );
         }
@@ -134,19 +164,31 @@ export async function POST(request: Request) {
       productName: projectLogFields.productName,
       category: projectLogFields.category,
       marketplace: projectLogFields.marketplace,
-      mock: allowMockFallback,
+      promptVersion: "workup-listing-v1",
+      mockEnabled: allowDevelopmentMock,
     });
 
-    const generation = await generateAmazonListing({
-      projectId,
+    const context = buildWorkUpGenerationContext({
+      projectId: projectId || "",
+      userId,
       projectData,
-      allowMockFallback,
+    });
+    const generation = await generateListingWithDeepSeek({
+      projectId,
+      userId,
+      productBrief: context.productBrief,
+      competitorInsights: context.competitorInsights,
+      listingStrategy: context.listingStrategy,
+      inputSnapshot: context.inputSnapshot,
+      prompt: context.prompt,
+      allowDevelopmentMock,
     });
 
     return NextResponse.json(generation);
   } catch (error) {
     return NextResponse.json(
       {
+        ok: false,
         error: error instanceof Error ? error.message : "生成失败，请稍后再试。",
       },
       { status: 500 },

@@ -1,79 +1,41 @@
-import { amazonListingSystemPrompt } from "@/lib/prompts/amazon-listing-system-prompt";
-import { amazonListingUserPromptTemplate } from "@/lib/prompts/amazon-listing-user-prompt";
-import { mockGenerationResult, normalizeGenerationResult } from "@/lib/mock-generation-result";
+import { analyzeCompetitorInput } from "@/lib/competitor-insights";
+import {
+  type GenerationValidationContext,
+  validateGenerationResult,
+} from "@/lib/generation-result-validation";
+import {
+  buildListingPrompt,
+  WORKUP_LISTING_PROMPT_VERSION,
+  type ListingPrompt,
+} from "@/lib/listing-prompt";
+import { buildListingStrategy } from "@/lib/listing-strategy";
+import { buildProductBrief, type BuildProductBriefInput } from "@/lib/product-brief";
 import { readServerEnv } from "@/lib/cloudflare-env";
-
-export const amazonListingResultSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "title",
-    "title_cn",
-    "bullet_points",
-    "description",
-    "search_terms",
-    "keyword_suggestions",
-    "image_suggestions",
-  ],
-  properties: {
-    title: { type: "string" },
-    title_cn: { type: "string" },
-    bullet_points: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["en", "cn"],
-        additionalProperties: false,
-        properties: {
-          en: { type: "string" },
-          cn: { type: "string" },
-        },
-      },
-    },
-    description: {
-      type: "object",
-      required: ["en", "cn"],
-      additionalProperties: false,
-      properties: {
-        en: { type: "string" },
-        cn: { type: "string" },
-      },
-    },
-    search_terms: {
-      type: "array",
-      items: { type: "string" },
-    },
-    keyword_suggestions: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["keyword", "reason_cn"],
-        additionalProperties: false,
-        properties: {
-          keyword: { type: "string" },
-          reason_cn: { type: "string" },
-        },
-      },
-    },
-    image_suggestions: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["scene", "cn"],
-        additionalProperties: false,
-        properties: {
-          scene: { type: "string" },
-          cn: { type: "string" },
-        },
-      },
-    },
-  },
-} as const;
+import type {
+  CompetitorInsights,
+  GenerationInputSnapshot,
+  GenerationResult,
+  ListingStrategy,
+  Marketplace,
+  ProductBrief,
+} from "@/lib/workup-schema";
 
 type GenerateListingInput = {
   projectId?: string;
+  userId?: string;
   projectData?: unknown;
-  allowMockFallback?: boolean;
+  allowDevelopmentMock?: boolean;
+};
+
+type DeepSeekGenerationInput = {
+  projectId?: string;
+  userId?: string;
+  productBrief: ProductBrief;
+  competitorInsights: CompetitorInsights;
+  listingStrategy: ListingStrategy;
+  inputSnapshot: GenerationInputSnapshot;
+  prompt?: ListingPrompt;
+  allowDevelopmentMock?: boolean;
 };
 
 type DeepSeekResponse = {
@@ -84,59 +46,236 @@ type DeepSeekResponse = {
   }>;
 };
 
+type GenerationResponse =
+  | {
+      ok: true;
+      source: "deepseek";
+      model: string;
+      result: GenerationResult;
+      inputSnapshot: GenerationInputSnapshot;
+      promptVersion: typeof WORKUP_LISTING_PROMPT_VERSION;
+    }
+  | {
+      ok: true;
+      source: "mock";
+      model: string;
+      result: GenerationResult;
+      inputSnapshot: GenerationInputSnapshot;
+      promptVersion: typeof WORKUP_LISTING_PROMPT_VERSION;
+      fallbackReason: string;
+    };
+
 const AI_REQUEST_TIMEOUT_MS = 20000;
-const AI_UNAVAILABLE_STATUS_CODES = new Set([401, 403, 429]);
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions";
-const STRICT_JSON_INSTRUCTIONS = `
-Return strict JSON only. Do not use Markdown code fences. Do not add any fields outside this shape:
-{
-  "title": "Amazon title in English",
-  "title_cn": "中文标题解释",
-  "bullet_points": [
-    {
-      "en": "English bullet point",
-      "cn": "中文解释"
-    }
-  ],
-  "description": {
-    "en": "English product description",
-    "cn": "中文解释"
-  },
-  "search_terms": ["keyword1", "keyword2", "keyword3"],
-  "keyword_suggestions": [
-    {
-      "keyword": "keyword",
-      "reason_cn": "中文原因"
-    }
-  ],
-  "image_suggestions": [
-    {
-      "scene": "image suggestion in English",
-      "cn": "中文图片建议"
-    }
-  ]
+const SYSTEM_PROMPT_ID = "workup-listing-system-prompt";
+const USER_PROMPT_ID = "workup-listing-user-prompt";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-Content requirements:
-- Generate 5 bullet_points unless the product material is too limited.
-- Keep title and bullet_points in natural Amazon US English.
-- Keep title_cn, bullet point cn, keyword reasons, and image suggestion cn in Chinese.
-- Do not mention dimensions, weight, load capacity, heavy-duty claims, colors,
-  certifications, waterproof performance, reinforced stitching, or package
-  contents unless they are explicitly present in the user productInfo.
-- If the input lacks a detail, write around the benefit in general terms instead
-  of inventing numbers or specifications.
-`;
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
 
-export function buildListingUserPrompt(projectData: unknown) {
-  return amazonListingUserPromptTemplate.replace(
-    "{{PROJECT_JSON}}",
-    JSON.stringify(projectData || {}, null, 2),
+function textValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+
+  return "";
+}
+
+function pickText(
+  source: Record<string, unknown>,
+  formData: Record<string, unknown>,
+  keys: string[],
+  fallback = "",
+) {
+  for (const key of keys) {
+    const directValue = textValue(source[key]);
+
+    if (directValue) {
+      return directValue;
+    }
+
+    const formValue = textValue(formData[key]);
+
+    if (formValue) {
+      return formValue;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeMarketplace(value: string): Marketplace {
+  return value === "UK" || value === "CA" || value === "AU" ? value : "US";
+}
+
+function normalizeFormData(value: unknown): Record<string, string | boolean | null> {
+  const record = asRecord(value);
+  const normalized: Record<string, string | boolean | null> = {};
+
+  for (const [key, item] of Object.entries(record)) {
+    if (typeof item === "string") {
+      normalized[key] = item;
+    } else if (typeof item === "number") {
+      normalized[key] = String(item);
+    } else if (typeof item === "boolean") {
+      normalized[key] = item;
+    } else if (item === null) {
+      normalized[key] = null;
+    }
+  }
+
+  return normalized;
+}
+
+function projectFormData(projectData: unknown) {
+  const project = asRecord(projectData);
+  const nestedFormData = asRecord(project.form_data);
+
+  return Object.keys(nestedFormData).length > 0 ? nestedFormData : project;
+}
+
+export function buildProductBriefInputFromProject(projectData: unknown): BuildProductBriefInput {
+  const project = asRecord(projectData);
+  const formData = projectFormData(projectData);
+  const productNameCn = pickText(
+    project,
+    formData,
+    ["productNameCn", "product_name_cn", "productName"],
   );
+  const productNameEn = pickText(project, formData, ["productNameEn", "product_name_en"]);
+  const marketplace = normalizeMarketplace(
+    pickText(project, formData, ["marketplace"], "US"),
+  );
+  const category = pickText(
+    project,
+    formData,
+    ["category"],
+    productNameCn ? "General Amazon Product" : "",
+  );
+  const targetPrice = pickText(project, formData, ["targetPrice", "target_price"]);
+  const targetCustomer = pickText(project, formData, [
+    "targetCustomer",
+    "target_customer",
+    "targetAudience",
+    "target_user",
+  ]);
+
+  return {
+    productNameCn,
+    productNameEn,
+    marketplace,
+    category,
+    targetPrice,
+    targetCustomer,
+    formData,
+  };
+}
+
+export function buildWorkUpGenerationContext(input: GenerateListingInput) {
+  const projectData = input.projectData || {};
+  const productBriefInput = buildProductBriefInputFromProject(projectData);
+  const productBrief = buildProductBrief(productBriefInput);
+  const competitorInsights = analyzeCompetitorInput(productBriefInput.formData);
+  const listingStrategy = buildListingStrategy(productBrief, competitorInsights);
+  const prompt = buildListingPrompt(productBrief, competitorInsights, listingStrategy);
+  const modelName = "deepseek-chat";
+  const inputSnapshot = createGenerationInputSnapshot({
+    projectId: input.projectId || "",
+    userId: input.userId || "",
+    projectData,
+    productBrief,
+    competitorInsights,
+    listingStrategy,
+    promptVersion: prompt.promptVersion,
+    modelName,
+  });
+
+  return {
+    productBrief,
+    competitorInsights,
+    listingStrategy,
+    prompt,
+    inputSnapshot,
+  };
+}
+
+export function createGenerationInputSnapshot(input: {
+  projectId: string;
+  userId: string;
+  projectData: unknown;
+  productBrief: ProductBrief;
+  competitorInsights: CompetitorInsights;
+  listingStrategy: ListingStrategy;
+  promptVersion: string;
+  modelName: string;
+}): GenerationInputSnapshot {
+  const project = asRecord(input.projectData);
+  const formData = normalizeFormData(projectFormData(input.projectData));
+
+  return {
+    schemaVersion: "workup.v1",
+    projectId: input.projectId,
+    userId: input.userId,
+    projectSnapshot: {
+      productNameCn: input.productBrief.product.nameCn,
+      productNameEn: input.productBrief.product.nameEn,
+      marketplace: input.productBrief.product.marketplace,
+      category: input.productBrief.product.category,
+      targetPrice: input.productBrief.product.targetPrice,
+      targetCustomer: input.productBrief.product.targetCustomer,
+      formData,
+    },
+    productBrief: input.productBrief,
+    competitorInsights: input.competitorInsights,
+    listingStrategy: input.listingStrategy,
+    prompt: {
+      version: input.promptVersion,
+      systemPromptId: SYSTEM_PROMPT_ID,
+      userPromptId: USER_PROMPT_ID,
+    },
+    model: {
+      provider: "deepseek",
+      name: textValue(project.model) || input.modelName,
+    },
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export function extractDeepSeekText(response: DeepSeekResponse) {
   return response.choices?.[0]?.message?.content?.trim() || "";
+}
+
+export function parseDeepSeekJsonResponse(responseText: string) {
+  const trimmed = responseText.trim();
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const start = withoutFence.indexOf("{");
+  const end = withoutFence.lastIndexOf("}");
+
+  if (start < 0 || end <= start) {
+    throw new Error("DeepSeek 返回了非 JSON 文本，无法保存为正式 Work UP GenerationResult。");
+  }
+
+  try {
+    return JSON.parse(withoutFence.slice(start, end + 1)) as unknown;
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `DeepSeek JSON 解析失败：${error.message}`
+        : "DeepSeek JSON 解析失败。",
+    );
+  }
 }
 
 export function isUsableDeepSeekKey(apiKey: string) {
@@ -154,16 +293,6 @@ export async function readAIProvider() {
   return "deepseek";
 }
 
-function mockListingResult(fallbackReason?: string) {
-  return {
-    source: "mock",
-    model: "mock-local",
-    demoMode: true,
-    ...(fallbackReason ? { fallbackReason: `演示模式：${fallbackReason}` } : { fallbackReason: "演示模式：当前使用本地 mock 结果。" }),
-    result: mockGenerationResult,
-  };
-}
-
 export async function hasAIProviderKeyAsync() {
   return isUsableDeepSeekKey(await readServerEnv("DEEPSEEK_API_KEY"));
 }
@@ -172,51 +301,158 @@ export async function isGenerationMockEnabled() {
   return (await readServerEnv("ENABLE_GENERATION_MOCK")).toLowerCase() === "true";
 }
 
-function parseGeneratedJson(text: string) {
-  const trimmed = text.trim();
-  const withoutFence = trimmed
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-  const start = withoutFence.indexOf("{");
-  const end = withoutFence.lastIndexOf("}");
-
-  if (start < 0 || end <= start) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(withoutFence.slice(start, end + 1));
-  } catch {
-    return null;
-  }
+function isDevelopmentLikeEnvironment() {
+  return process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 }
 
-async function generateWithDeepSeek(input: GenerateListingInput) {
+function createDevelopmentPlaceholderResult(
+  input: DeepSeekGenerationInput,
+  model: string,
+): GenerationResult {
+  const { productBrief, competitorInsights, listingStrategy } = input;
+  const safeClaims = listingStrategy.safeClaims.map((item) => item.claim).join(", ");
+  const titleKeyword = listingStrategy.primaryKeyword || productBrief.product.category;
+
+  return {
+    schemaVersion: "workup.v1",
+    source: "deepseek",
+    generatedAt: new Date().toISOString(),
+    model,
+    qualityScore: {
+      overall: 60,
+      level: "basic",
+      dimensions: {
+        inputCompleteness: productBrief.rawInputCompleteness.optionalFieldsProvided * 10,
+        keywordRelevance: 60,
+        complianceSafety: 90,
+        amazonReadiness: 55,
+        copyClarity: 70,
+      },
+      summary: "开发环境 mock：基于 Work UP 新链路生成的占位结果，不能保存为真实项目结果。",
+    },
+    productBrief,
+    competitorInsights,
+    listingStrategy,
+    finalListing: {
+      title: {
+        english: `${titleKeyword} for Practical Amazon Listing Preview`,
+        chineseExplanation: "开发环境占位标题，只用于本地调试。",
+      },
+      bulletPoints: [
+        {
+          english: `Built around confirmed product facts: ${safeClaims || "basic category information"}.`,
+          chineseExplanation: "只引用已确认事实。",
+          sourceBasis: "confirmed_fact",
+          evidenceFields: ["safeClaims"],
+        },
+        {
+          english: "Conservative wording avoids unverified specifications or compliance-sensitive promises.",
+          chineseExplanation: "避免未经确认的规格和强承诺。",
+          sourceBasis: "safe_inference",
+          evidenceFields: ["avoidClaims"],
+        },
+        {
+          english: "Designed as a simple draft for reviewing the Work UP generation pipeline.",
+          chineseExplanation: "用于检查生成链路，而不是正式文案。",
+          sourceBasis: "safe_inference",
+          evidenceFields: ["schemaVersion"],
+        },
+        {
+          english: "Competitor insights are kept as strategy input without copying unconfirmed competitor claims.",
+          chineseExplanation: "竞品信息只作为策略输入。",
+          sourceBasis: "competitor_inspired",
+          evidenceFields: ["competitorInsights.notes"],
+        },
+        {
+          english: "Add missing product details to improve title precision, bullet strength, and buyer confidence.",
+          chineseExplanation: "提醒用户补充资料。",
+          sourceBasis: "safe_inference",
+          evidenceFields: ["missingInfo"],
+        },
+      ],
+      description: {
+        english:
+          "This development preview confirms the Work UP pipeline can build a structured listing result from product facts, competitor insights, and listing strategy.",
+        chineseExplanation: "开发环境说明，不应用于正式保存。",
+      },
+      searchTerms: {
+        english: listingStrategy.secondaryKeywords.slice(0, 6).join(" ") || titleKeyword,
+        chineseExplanation: "使用安全关键词生成的开发占位 Search Terms。",
+      },
+    },
+    complianceNotes: [],
+    missingInfo: productBrief.missingInfo,
+    assumptions: [
+      {
+        assumption: "This is a development-only mock generated without DeepSeek.",
+        reason: "ENABLE_GENERATION_MOCK is enabled outside production.",
+        confidence: "high",
+        shouldVerifyWithUser: true,
+      },
+    ],
+    improvementSuggestions: [
+      {
+        priority: "high",
+        suggestion: "接入真实 DeepSeek 返回后再保存正式结果。",
+        reason: "开发 mock 不能代表真实生成质量。",
+        expectedImpact: "conversion",
+      },
+    ],
+    analysis: {
+      productSummary: "开发环境占位结果。",
+      strategySummary: "已完成 ProductBrief、CompetitorInsights、ListingStrategy 链路。",
+      competitorSummary: "竞品 claim 未直接进入最终文案。",
+      complianceSummary: "高风险 claim 保持在 avoidClaims 中。",
+      beginnerExplanation: "这是本地调试结果，不是 DeepSeek 正式生成。",
+    },
+  };
+}
+
+export async function generateListingWithDeepSeek(
+  input: DeepSeekGenerationInput,
+): Promise<GenerationResponse> {
+  await readAIProvider();
+
   const apiKey = await readServerEnv("DEEPSEEK_API_KEY");
-  const allowMockFallback = input.allowMockFallback === true;
-
-  if (!isUsableDeepSeekKey(apiKey)) {
-    if (!allowMockFallback) {
-      throw new Error("DEEPSEEK_API_KEY 未配置或不可用，真实项目生成不能使用 mock 结果。");
-    }
-
-    return mockListingResult(
-      "当前未配置可用的 DeepSeek API key，已使用本地 mock 结果。请在 DeepSeek 平台购买 API 余额后再使用真实生成。",
-    );
-  }
-
   const model = (await readServerEnv("DEEPSEEK_MODEL")) || "deepseek-chat";
   const baseUrl = (await readServerEnv("DEEPSEEK_BASE_URL")) || DEFAULT_DEEPSEEK_BASE_URL;
+  const prompt = input.prompt || buildListingPrompt(
+    input.productBrief,
+    input.competitorInsights,
+    input.listingStrategy,
+  );
+  const inputSnapshot = {
+    ...input.inputSnapshot,
+    prompt: {
+      ...input.inputSnapshot.prompt,
+      version: prompt.promptVersion,
+    },
+    model: {
+      provider: "deepseek" as const,
+      name: model,
+    },
+  };
+
+  if (!isUsableDeepSeekKey(apiKey)) {
+    if (input.allowDevelopmentMock && isDevelopmentLikeEnvironment()) {
+      return {
+        ok: true,
+        source: "mock",
+        model: "deepseek-development-mock",
+        result: createDevelopmentPlaceholderResult(input, "deepseek-development-mock"),
+        inputSnapshot,
+        promptVersion: prompt.promptVersion,
+        fallbackReason:
+          "开发环境 ENABLE_GENERATION_MOCK=true，未配置可用 DeepSeek API key，返回不可保存的开发 mock。",
+      };
+    }
+
+    throw new Error("DEEPSEEK_API_KEY 未配置或不可用，真实生成不能 fallback mock。");
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
   let response: Response;
-
-  const promptProjectData = {
-    project_id: input.projectId,
-    project_data: input.projectData || {},
-  };
-  const prompt = buildListingUserPrompt(promptProjectData);
 
   try {
     response = await fetch(baseUrl, {
@@ -231,79 +467,70 @@ async function generateWithDeepSeek(input: GenerateListingInput) {
         messages: [
           {
             role: "system",
-            content: `${amazonListingSystemPrompt}\n\n${STRICT_JSON_INSTRUCTIONS}`,
+            content: prompt.systemPrompt,
           },
           {
             role: "user",
-            content: prompt,
+            content: prompt.userPrompt,
           },
         ],
         response_format: { type: "json_object" },
       }),
     });
   } catch (error) {
-    if (!allowMockFallback) {
-      throw new Error(
-        error instanceof Error
-          ? `DeepSeek 请求失败：${error.message}`
-          : "DeepSeek 请求失败，请稍后再试。",
-      );
-    }
-
-    return mockListingResult("DeepSeek 请求超时或连接失败，已使用本地 mock 结果。");
+    throw new Error(
+      error instanceof Error
+        ? `DeepSeek 请求失败：${error.message}`
+        : "DeepSeek 请求失败，请稍后再试。",
+    );
   } finally {
     clearTimeout(timeoutId);
   }
 
-  const payload = (await response.json().catch(() => null)) as DeepSeekResponse & {
+  const payload = (await response.json().catch(() => null)) as (DeepSeekResponse & {
     error?: { message?: string };
-  } | null;
+  }) | null;
 
   if (!response.ok) {
-    if (AI_UNAVAILABLE_STATUS_CODES.has(response.status)) {
-      if (!allowMockFallback) {
-        throw new Error(
-          payload?.error?.message ||
-            `DeepSeek API 暂不可用或账号余额不足，状态码：${response.status}`,
-        );
-      }
-
-      return mockListingResult(
-        "DeepSeek API key 暂不可用或当前账号没有 API 余额，已使用本地 mock 结果。请在 DeepSeek 平台购买 API 余额后再使用真实生成。",
-      );
-    }
-
     throw new Error(payload?.error?.message || `DeepSeek 生成失败，状态码：${response.status}`);
   }
 
-  const text = extractDeepSeekText(payload || {});
+  const responseText = extractDeepSeekText(payload || {});
 
-  if (!text) {
-    if (!allowMockFallback) {
-      throw new Error("DeepSeek 没有返回可解析的 Listing 结果。");
-    }
-
-    return mockListingResult("DeepSeek 没有返回可解析的 Listing 结果，已使用本地 mock 结果。");
+  if (!responseText) {
+    throw new Error("DeepSeek 没有返回可解析的 Work UP GenerationResult。");
   }
 
-  const parsedResult = parseGeneratedJson(text);
-
-  if (!parsedResult) {
-    if (!allowMockFallback) {
-      throw new Error("DeepSeek 返回了非 JSON 文本，无法保存为正式 Listing 结果。");
-    }
-
-    return mockListingResult("DeepSeek 返回了非 JSON 文本，已使用本地 mock 结果。");
-  }
+  const rawResult = parseDeepSeekJsonResponse(responseText);
+  const validationContext: GenerationValidationContext = {
+    productBrief: input.productBrief,
+    competitorInsights: input.competitorInsights,
+    listingStrategy: input.listingStrategy,
+    model,
+  };
+  const result = validateGenerationResult(rawResult, validationContext);
 
   return {
+    ok: true,
     source: "deepseek",
     model,
-    result: normalizeGenerationResult(parsedResult, input.projectData),
+    result,
+    inputSnapshot,
+    promptVersion: prompt.promptVersion,
   };
 }
 
 export async function generateAmazonListing(input: GenerateListingInput) {
-  await readAIProvider();
-  return generateWithDeepSeek(input);
+  const context = buildWorkUpGenerationContext(input);
+
+  return generateListingWithDeepSeek({
+    projectId: input.projectId,
+    userId: input.userId,
+    productBrief: context.productBrief,
+    competitorInsights: context.competitorInsights,
+    listingStrategy: context.listingStrategy,
+    inputSnapshot: context.inputSnapshot,
+    prompt: context.prompt,
+    allowDevelopmentMock: input.allowDevelopmentMock,
+  });
 }
