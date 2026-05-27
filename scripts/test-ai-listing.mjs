@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
+const { default: dotenv } = await import("dotenv");
+dotenv.config({ path: ".env.local" });
+
 function transpile(source) {
   return ts.transpileModule(source, {
     compilerOptions: {
@@ -22,6 +25,7 @@ function loadModule(source, require = () => {
   return cjsModule.exports;
 }
 
+const nativeFetch = global.fetch;
 const sourceMap = new Map();
 
 for (const path of [
@@ -41,10 +45,15 @@ const listingStrategyModule = loadModule(sourceMap.get("../lib/listing-strategy.
 const listingPromptModule = loadModule(sourceMap.get("../lib/listing-prompt.ts"));
 const validationModule = loadModule(sourceMap.get("../lib/generation-result-validation.ts"));
 const envValues = new Map([
-  ["AI_PROVIDER", "deepseek"],
-  ["DEEPSEEK_API_KEY", "sk-deepseek-test-valid-format-key"],
-  ["DEEPSEEK_MODEL", "deepseek-chat"],
+  ["AI_PROVIDER", process.env.AI_PROVIDER || "deepseek"],
+  ["DEEPSEEK_API_KEY", process.env.DEEPSEEK_API_KEY || "sk-deepseek-test-valid-format-key"],
+  ["DEEPSEEK_MODEL", process.env.DEEPSEEK_MODEL || "deepseek-chat"],
+  [
+    "DEEPSEEK_BASE_URL",
+    process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/chat/completions",
+  ],
 ]);
+const liveDeepSeekKey = process.env.DEEPSEEK_API_KEY?.trim() || "";
 const calls = {
   buildProductBrief: 0,
   analyzeCompetitorInput: 0,
@@ -117,27 +126,12 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function createValidResult(context, overrides = {}) {
+function createValidResult(overrides = {}) {
   const base = {
     schemaVersion: "workup.v1",
     source: "deepseek",
     generatedAt: "2026-05-26T00:00:00.000Z",
     model: "deepseek-chat",
-    qualityScore: {
-      overall: 76,
-      level: "good",
-      dimensions: {
-        inputCompleteness: 45,
-        keywordRelevance: 82,
-        complianceSafety: 92,
-        amazonReadiness: 76,
-        copyClarity: 84,
-      },
-      summary: "基于低信息输入生成保守版本。",
-    },
-    productBrief: context.productBrief,
-    competitorInsights: context.competitorInsights,
-    listingStrategy: context.listingStrategy,
     finalListing: {
       title: {
         english: "Black ABS Hard Shell Suitcase for Practical Travel Use",
@@ -186,7 +180,7 @@ function createValidResult(context, overrides = {}) {
       },
     },
     complianceNotes: [],
-    missingInfo: context.productBrief.missingInfo,
+    missingInfo: [],
     assumptions: [],
     improvementSuggestions: [],
     analysis: {
@@ -206,19 +200,23 @@ global.fetch = async (url, init) => {
   lastRequestBody = JSON.parse(init.body);
 
   assert.equal(lastRequestBody.model, "deepseek-chat");
+  assert.equal(lastRequestBody.max_tokens, 2200);
+  assert.equal(lastRequestBody.temperature, 0.4);
   assert.equal(lastRequestBody.response_format.type, "json_object");
-  assert.match(lastRequestBody.messages[0].content, /Work UP/);
+  assert.match(lastRequestBody.messages[0].content, /Return one JSON object only/);
+  assert.match(lastRequestBody.messages[0].content, /Do not add extra top-level keys/);
   assert.match(lastRequestBody.messages[1].content, /行李箱/);
   assert.match(lastRequestBody.messages[1].content, /Travel & Luggage/);
   assert.match(lastRequestBody.messages[1].content, /黑色/);
   assert.match(lastRequestBody.messages[1].content, /ABS/);
+  assert.match(lastRequestBody.messages[1].content, /Do not return schemaVersion/);
 
   return new Response(
     JSON.stringify({
       choices: [
         {
           message: {
-            content: JSON.stringify(createValidResult(lastPromptContext)),
+            content: JSON.stringify(createValidResult()),
           },
         },
       ],
@@ -257,9 +255,14 @@ assert.equal(lowInfoGeneration.inputSnapshot.projectSnapshot.formData.color, "�
 assert.equal(lowInfoGeneration.inputSnapshot.projectSnapshot.formData.material, "ABS");
 assert.ok(lowInfoGeneration.inputSnapshot.competitorInsights);
 assert.ok(lowInfoGeneration.inputSnapshot.listingStrategy);
+assert.equal(typeof lowInfoGeneration.result.qualityScore.overall, "number");
+assert.equal(typeof lowInfoGeneration.result.qualityScore.level, "string");
+assert.equal(lowInfoGeneration.result.productBrief.product.nameCn, "行李箱");
+assert.equal(lowInfoGeneration.result.competitorInsights, lastPromptContext.competitorInsights);
+assert.equal(lowInfoGeneration.result.listingStrategy, lastPromptContext.listingStrategy);
 assert.ok(lastRequestBody.messages[1].content.includes("productBrief"));
 
-const fencedJson = `\`\`\`json\n${JSON.stringify(createValidResult(lastPromptContext))}\n\`\`\``;
+const fencedJson = `\`\`\`json\n${JSON.stringify(createValidResult())}\n\`\`\``;
 assert.equal(aiListingModule.parseDeepSeekJsonResponse(fencedJson).source, "deepseek");
 assert.throws(
   () => aiListingModule.parseDeepSeekJsonResponse("这里不是 JSON，只是一段普通文本。"),
@@ -290,7 +293,7 @@ await assert.rejects(
 );
 
 global.fetch = async () => {
-  const mockSourceResult = createValidResult(lastPromptContext, { source: "mock" });
+  const mockSourceResult = createValidResult({ source: "mock" });
 
   return new Response(
     JSON.stringify({ choices: [{ message: { content: JSON.stringify(mockSourceResult) } }] }),
@@ -298,23 +301,23 @@ global.fetch = async () => {
   );
 };
 
-await assert.rejects(
-  () =>
-    aiListingModule.generateAmazonListing({
-      projectId: "project-source-mock",
-      userId: "user-1",
-      projectData: {
-        product_name_cn: "行李箱",
-        marketplace: "US",
-        category: "Travel & Luggage",
-        form_data: { color: "黑色", material: "ABS" },
-      },
-    }),
-  /source/,
-);
+const normalizedSourceGeneration = await aiListingModule.generateAmazonListing({
+  projectId: "project-source-mock",
+  userId: "user-1",
+  projectData: {
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    form_data: { color: "黑色", material: "ABS" },
+  },
+});
+
+assert.equal(normalizedSourceGeneration.ok, true);
+assert.equal(normalizedSourceGeneration.source, "deepseek");
+assert.equal(normalizedSourceGeneration.result.source, "deepseek");
 
 global.fetch = async () => {
-  const blockedClaimResult = clone(createValidResult(lastPromptContext));
+  const blockedClaimResult = clone(createValidResult());
   blockedClaimResult.finalListing.title.english =
     "Black ABS Suitcase with TSA Lock for Travel";
 
@@ -365,5 +368,46 @@ await assert.rejects(
 
 assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("mock-generation-result"));
 assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("normalizeGenerationResult"));
+
+envValues.set("DEEPSEEK_API_KEY", liveDeepSeekKey);
+global.fetch = nativeFetch;
+
+if (liveDeepSeekKey) {
+  const liveStart = Date.now();
+  const liveGeneration = await aiListingModule.generateAmazonListing({
+    projectId: "project-live-timing",
+    userId: "user-1",
+    projectData: {
+      product_name_cn: "行李箱",
+      marketplace: "US",
+      category: "Travel & Luggage",
+      form_data: {
+        color: "黑色",
+        material: "ABS",
+      },
+    },
+  });
+  const liveElapsedMs = Date.now() - liveStart;
+
+  assert.equal(liveGeneration.ok, true);
+  assert.equal(liveGeneration.source, "deepseek");
+  assert.equal(liveGeneration.result.source, "deepseek");
+  assert.equal(liveGeneration.result.finalListing.bulletPoints.length, 5);
+
+  console.log(`DeepSeek live elapsedMs=${liveElapsedMs}`);
+  console.log(
+    JSON.stringify(
+      {
+        source: liveGeneration.source,
+        elapsedMs: liveElapsedMs,
+        model: liveGeneration.model,
+      },
+      null,
+      2,
+    ),
+  );
+} else {
+  console.log("DeepSeek live elapsedMs=skipped");
+}
 
 console.log("DeepSeek Work UP generation tests passed");

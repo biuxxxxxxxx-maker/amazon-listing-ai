@@ -201,6 +201,11 @@ export async function POST(request: Request) {
       }
     }
 
+    const context = buildWorkUpGenerationContext({
+      projectId: projectId || "",
+      userId,
+      projectData,
+    });
     const provider = await readAIProvider();
     const model = (await readServerEnv("DEEPSEEK_MODEL")) || "deepseek-chat";
     const projectLogFields = readProjectLogFields(projectData);
@@ -211,15 +216,10 @@ export async function POST(request: Request) {
       productName: projectLogFields.productName,
       category: projectLogFields.category,
       marketplace: projectLogFields.marketplace,
-      promptVersion: "workup-listing-v1",
+      promptVersion: context.prompt.promptVersion,
       mockEnabled: allowDevelopmentMock,
     });
 
-    const context = buildWorkUpGenerationContext({
-      projectId: projectId || "",
-      userId,
-      projectData,
-    });
     const generation = await generateListingWithDeepSeek({
       projectId,
       userId,

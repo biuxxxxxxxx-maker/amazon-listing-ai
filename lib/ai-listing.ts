@@ -65,7 +65,7 @@ type GenerationResponse =
       fallbackReason: string;
     };
 
-const AI_REQUEST_TIMEOUT_MS = 20000;
+const AI_REQUEST_TIMEOUT_MS = 55000;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions";
 const SYSTEM_PROMPT_ID = "workup-listing-system-prompt";
 const USER_PROMPT_ID = "workup-listing-user-prompt";
@@ -278,6 +278,111 @@ export function parseDeepSeekJsonResponse(responseText: string) {
   }
 }
 
+function asArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function buildFallbackQualityScore(context: GenerationValidationContext) {
+  const completeness = context.productBrief.rawInputCompleteness;
+  const requiredScore = completeness.requiredFieldsProvided * 20;
+  const optionalScore = completeness.optionalFieldsProvided * 4;
+  const completenessScore = clamp(Math.round(requiredScore + optionalScore), 0, 100);
+  const keywordScore = context.listingStrategy.primaryKeyword ? 74 : 62;
+  const compliancePenalty =
+    context.productBrief.prohibitedClaims.length +
+    context.listingStrategy.avoidClaims.length > 0
+      ? 0
+      : 4;
+  const complianceSafety = clamp(90 - compliancePenalty, 0, 100);
+  const amazonReadiness = clamp(
+    Math.round((completenessScore + keywordScore + complianceSafety) / 3),
+    0,
+    100,
+  );
+  const copyClarity = clamp(
+    Math.round(
+      68 +
+        Math.min(context.productBrief.confirmedFacts.length, 8) * 2 +
+        Math.min(context.listingStrategy.safeClaims.length, 4) * 2,
+    ),
+    0,
+    100,
+  );
+  const overall = clamp(
+    Math.round(
+      (completenessScore + keywordScore + complianceSafety + amazonReadiness + copyClarity) / 5,
+    ),
+    0,
+    100,
+  );
+  const level: GenerationResult["qualityScore"]["level"] =
+    overall >= 78 ? "strong" : overall >= 60 ? "good" : "basic";
+
+  return {
+    overall,
+    level,
+    dimensions: {
+      inputCompleteness: completenessScore,
+      keywordRelevance: keywordScore,
+      complianceSafety,
+      amazonReadiness,
+      copyClarity,
+    },
+    summary: context.productBrief.rawInputCompleteness.optionalFieldsProvided > 0
+      ? "服务端根据当前产品资料生成稳定评分，保证前端可用。"
+      : "服务端根据有限产品资料生成保守评分，保证前端可用。",
+  };
+}
+
+function buildFallbackAnalysis(context: GenerationValidationContext) {
+  const primaryKeyword = context.listingStrategy.primaryKeyword || context.productBrief.product.category;
+  const competitorNote = context.competitorInsights.opportunities.length
+    ? `保留竞品机会点：${context.competitorInsights.opportunities[0].opportunity}。`
+    : "竞品线索仅用于策略，不直接写入最终文案。";
+
+  return {
+    productSummary: `${context.productBrief.product.category} listing centered on ${primaryKeyword}.`,
+    strategySummary: context.listingStrategy.positioning.direction,
+    competitorSummary: competitorNote,
+    complianceSummary:
+      context.listingStrategy.avoidClaims.length > 0
+        ? `已避开 ${context.listingStrategy.avoidClaims.length} 个高风险 claim。`
+        : "当前策略未发现额外高风险 claim。",
+    beginnerExplanation: "服务端补齐分析字段，保证结果页稳定展示。",
+  };
+}
+
+function normalizeDeepSeekResult(
+  rawResult: unknown,
+  context: GenerationValidationContext,
+  model: string,
+): GenerationResult {
+  const result = isRecord(rawResult) ? rawResult : {};
+
+  return {
+    schemaVersion: "workup.v1",
+    source: "deepseek",
+    generatedAt: new Date().toISOString(),
+    model,
+    qualityScore: buildFallbackQualityScore(context),
+    productBrief: context.productBrief,
+    competitorInsights: context.competitorInsights,
+    listingStrategy: context.listingStrategy,
+    finalListing: result.finalListing as GenerationResult["finalListing"],
+    complianceNotes: asArray(result.complianceNotes) as GenerationResult["complianceNotes"],
+    missingInfo: (asArray(result.missingInfo).length > 0
+      ? asArray(result.missingInfo)
+      : context.productBrief.missingInfo) as GenerationResult["missingInfo"],
+    assumptions: asArray(result.assumptions) as GenerationResult["assumptions"],
+    improvementSuggestions: asArray(result.improvementSuggestions) as GenerationResult["improvementSuggestions"],
+    analysis: (isRecord(result.analysis) ? result.analysis : buildFallbackAnalysis(context)) as GenerationResult["analysis"],
+  };
+}
+
 export function isUsableDeepSeekKey(apiKey: string) {
   const normalizedKey = apiKey.trim();
 
@@ -452,6 +557,13 @@ export async function generateListingWithDeepSeek(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  const requestStartedAt = Date.now();
+  console.log("[generate-listing]", {
+    event: "DeepSeek request started",
+    source: "deepseek",
+    model,
+    promptVersion: prompt.promptVersion,
+  });
   let response: Response;
 
   try {
@@ -464,6 +576,8 @@ export async function generateListingWithDeepSeek(
       },
       body: JSON.stringify({
         model,
+        max_tokens: 2200,
+        temperature: 0.4,
         messages: [
           {
             role: "system",
@@ -478,6 +592,13 @@ export async function generateListingWithDeepSeek(
       }),
     });
   } catch (error) {
+    const elapsedMs = Date.now() - requestStartedAt;
+    console.log("[generate-listing]", {
+      event: "DeepSeek request finished",
+      source: "deepseek",
+      elapsedMs,
+      ok: false,
+    });
     throw new Error(
       error instanceof Error
         ? `DeepSeek 请求失败：${error.message}`
@@ -486,6 +607,14 @@ export async function generateListingWithDeepSeek(
   } finally {
     clearTimeout(timeoutId);
   }
+
+  const elapsedMs = Date.now() - requestStartedAt;
+  console.log("[generate-listing]", {
+    event: "DeepSeek request finished",
+    source: "deepseek",
+    elapsedMs,
+    status: response.status,
+  });
 
   const payload = (await response.json().catch(() => null)) as (DeepSeekResponse & {
     error?: { message?: string };
@@ -502,13 +631,23 @@ export async function generateListingWithDeepSeek(
   }
 
   const rawResult = parseDeepSeekJsonResponse(responseText);
+  const normalizedResult = normalizeDeepSeekResult(
+    rawResult,
+    {
+      productBrief: input.productBrief,
+      competitorInsights: input.competitorInsights,
+      listingStrategy: input.listingStrategy,
+      model,
+    },
+    model,
+  );
   const validationContext: GenerationValidationContext = {
     productBrief: input.productBrief,
     competitorInsights: input.competitorInsights,
     listingStrategy: input.listingStrategy,
     model,
   };
-  const result = validateGenerationResult(rawResult, validationContext);
+  const result = validateGenerationResult(normalizedResult, validationContext);
 
   return {
     ok: true,

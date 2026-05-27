@@ -62,33 +62,22 @@ const lowInfoPrompt = buildListingPrompt(
 const lowInfoPromptText = `${lowInfoPrompt.systemPrompt}\n${lowInfoPrompt.userPrompt}`;
 
 assert.equal(lowInfoPrompt.promptVersion, "workup-listing-v1");
-assert.match(buildListingSystemPrompt(), /strict JSON/);
+assert.match(buildListingSystemPrompt(), /Return one JSON object only/);
 assert.match(
   buildListingUserPrompt(lowInfoProductBrief, emptyCompetitorInsights, lowInfoStrategy),
-  /Work UP context JSON/,
+  /Use this input JSON as the only business source/,
 );
-assert.match(lowInfoPromptText, /strict JSON/);
-assert.match(lowInfoPromptText, /schemaVersion/);
-assert.match(lowInfoPromptText, /source.*deepseek/i);
+assert.match(lowInfoPromptText, /Return one JSON object only/);
+assert.match(lowInfoPromptText, /Do not add extra top-level keys/);
+assert.match(lowInfoPromptText, /Do not output productBrief, competitorInsights, or listingStrategy/);
 assert.match(lowInfoPromptText, /exactly 5 bulletPoints/);
-assert.match(lowInfoPromptText, /title/);
-assert.match(lowInfoPromptText, /description/);
-assert.match(lowInfoPromptText, /searchTerms/);
-assert.match(lowInfoPromptText, /confirmedFacts/);
-assert.match(lowInfoPromptText, /missingInfo/);
-assert.match(lowInfoPromptText, /avoidClaims/);
-assert.match(lowInfoPromptText, /safeClaims/);
-assert.match(lowInfoPromptText, /qualityScore.level must be exactly one of/);
-assert.match(lowInfoPromptText, /productBrief, competitorInsights, and listingStrategy must be JSON objects/);
-assert.doesNotMatch(lowInfoPromptText, /"level": "basic\|good\|strong"/);
-assert.doesNotMatch(
-  lowInfoPromptText,
-  /"sourceBasis": "confirmed_fact\|safe_inference\|competitor_inspired"/,
-);
-assert.match(lowInfoPromptText, /Do not invent.*TSA lock/i);
-assert.match(lowInfoPromptText, /airline approved/);
-assert.match(lowInfoPromptText, /waterproof/);
-assert.match(lowInfoPromptText, /exact size/);
+assert.match(lowInfoPromptText, /Do not return schemaVersion, source, generatedAt, model, qualityScore, productBrief, competitorInsights, or listingStrategy/);
+assert.match(lowInfoPromptText, /sourceBasis must be one of/);
+assert.match(lowInfoPromptText, /Do not invent unsupported claims/);
+assert.match(lowInfoPromptText, /Search terms must stay clean/);
+assert.doesNotMatch(lowInfoPromptText, /Required GenerationResult shape/);
+assert.doesNotMatch(lowInfoPromptText, /Work UP context JSON/);
+assert.doesNotMatch(lowInfoPromptText, /productBrief, competitorInsights, and listingStrategy must be JSON objects/);
 
 const competitorInsights = analyzeCompetitorInput({
   competitorTitle: [
@@ -113,6 +102,6 @@ assert.match(
   competitorPromptText,
   /unconfirmed competitor features must become missingInfo or opportunities/,
 );
-assert.match(competitorPromptText, /avoidClaims must not enter finalListing/);
+assert.match(competitorPromptText, /Do not add extra top-level keys/);
 
 console.log("Listing Prompt tests passed");
