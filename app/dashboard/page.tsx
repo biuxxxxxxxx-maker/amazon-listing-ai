@@ -14,6 +14,7 @@ import {
   Sparkles,
   Tags,
 } from "lucide-react";
+import { UserMenu } from "@/components/auth/user-menu";
 import { BrandLink } from "@/components/layout/brand-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { projects as mockProjects } from "@/lib/mock-data";
 import { mvpTools } from "@/lib/mvp-tools";
-import { clearWorkUpAuthState, getBrowserSupabase } from "@/lib/supabase-browser";
+import { getBrowserSupabase } from "@/lib/supabase-browser";
 import type { Marketplace, Project } from "@/lib/types";
 
 type ProductProjectRow = {
@@ -121,17 +122,6 @@ export default function DashboardPage() {
     loadProjects();
   }, [supabaseReady]);
 
-  async function signOut() {
-    try {
-      if (supabaseReady) {
-        await getBrowserSupabase().auth.signOut();
-      }
-    } finally {
-      clearWorkUpAuthState();
-      window.location.href = "/login";
-    }
-  }
-
   const focusProject = dashboardProjects[0] || mockProjects[0];
   const stats = useMemo(
     () => [
@@ -162,9 +152,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl">
         <nav className="mb-10 flex items-center justify-between">
           <BrandLink />
-          <Button variant="secondary" size="sm" onClick={signOut}>
-            退出登录
-          </Button>
+          <UserMenu />
         </nav>
 
         <PageHeader

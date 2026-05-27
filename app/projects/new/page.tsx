@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { UserMenu } from "@/components/auth/user-menu";
 import { ListingWizard } from "@/components/project-form/listing-wizard";
 import { BrandLink } from "@/components/layout/brand-link";
 import { PageHeader } from "@/components/layout/page-header";
@@ -26,12 +27,15 @@ export default async function NewProjectPage({
       <div className="mx-auto max-w-6xl">
         <nav className="mb-10 flex items-center justify-between">
           <BrandLink />
-          <Link href="/dashboard">
-            <Button variant="secondary" size="sm">
-              <ArrowLeft className="size-4" />
-              返回工作台
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard">
+              <Button variant="secondary" size="sm">
+                <ArrowLeft className="size-4" />
+                返回工作台
+              </Button>
+            </Link>
+            <UserMenu />
+          </div>
         </nav>
         <PageHeader
           title="创建 Amazon Listing 项目"

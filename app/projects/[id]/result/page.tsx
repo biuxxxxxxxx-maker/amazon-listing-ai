@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { UserMenu } from "@/components/auth/user-menu";
 import { BrandLink } from "@/components/layout/brand-link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -431,12 +432,15 @@ export default function ResultPage() {
       <div className="mx-auto max-w-7xl">
         <nav className="mb-10 flex items-center justify-between">
           <BrandLink />
-          <Link href="/projects/new">
-            <Button variant="secondary" size="sm">
-              <ArrowLeft className="size-4" />
-              返回编辑
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/projects/new">
+              <Button variant="secondary" size="sm">
+                <ArrowLeft className="size-4" />
+                返回编辑
+              </Button>
+            </Link>
+            <UserMenu />
+          </div>
         </nav>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">

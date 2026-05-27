@@ -150,11 +150,25 @@ test.describe("auth flow", () => {
     await page.getByTestId("auth-password-input").fill(process.env.E2E_TEST_PASSWORD || "e2e-password");
     await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+    await page.getByTestId("user-menu-button").click();
+    await expect(page.getByRole("menuitem", { name: "进入控制台" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "个人设置" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "退出" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("user-menu-dropdown")).toHaveCount(0);
     await page.reload();
     await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
     await page.goto("/projects/new");
     await expect(page).toHaveURL(/\/projects\/new/);
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+    await page.getByTestId("user-menu-button").click();
+    await page.getByRole("menuitem", { name: "进入控制台" }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
     const rememberedState = await readWorkUpAuthState(page);
     expect(rememberedState).toEqual({
       rememberLocal: "true",
@@ -189,8 +203,11 @@ test.describe("auth flow", () => {
     await page.getByTestId("auth-password-input").fill("e2e-password");
     await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
-    await page.getByRole("button", { name: "退出登录" }).click();
+    await expect(page.getByTestId("user-menu-button")).toBeVisible();
+    await page.getByTestId("user-menu-button").click();
+    await page.getByRole("menuitem", { name: "退出" }).click();
     await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId("user-menu-button")).toHaveCount(0);
 
     const clearedState = await readWorkUpAuthState(page);
     expect(clearedState).toEqual({
