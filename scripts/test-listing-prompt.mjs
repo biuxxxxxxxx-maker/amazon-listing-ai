@@ -78,6 +78,13 @@ assert.match(lowInfoPromptText, /confirmedFacts/);
 assert.match(lowInfoPromptText, /missingInfo/);
 assert.match(lowInfoPromptText, /avoidClaims/);
 assert.match(lowInfoPromptText, /safeClaims/);
+assert.match(lowInfoPromptText, /qualityScore.level must be exactly one of/);
+assert.match(lowInfoPromptText, /productBrief, competitorInsights, and listingStrategy must be JSON objects/);
+assert.doesNotMatch(lowInfoPromptText, /"level": "basic\|good\|strong"/);
+assert.doesNotMatch(
+  lowInfoPromptText,
+  /"sourceBasis": "confirmed_fact\|safe_inference\|competitor_inspired"/,
+);
 assert.match(lowInfoPromptText, /Do not invent.*TSA lock/i);
 assert.match(lowInfoPromptText, /airline approved/);
 assert.match(lowInfoPromptText, /waterproof/);

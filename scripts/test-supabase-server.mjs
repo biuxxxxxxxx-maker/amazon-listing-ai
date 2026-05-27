@@ -21,12 +21,19 @@ const require = (specifier) => {
     return { readServerEnv: async () => "" };
   }
 
+  if (specifier.includes("supabase-config")) {
+    return {
+      normalizeEnvText: (value) => (typeof value === "string" ? value.trim() : ""),
+      normalizeSupabaseProjectUrl: (value) => (typeof value === "string" ? value.trim() : ""),
+    };
+  }
+
   throw new Error(`Unexpected require: ${specifier}`);
 };
 
 new Function("exports", "module", "require", output.outputText)(exports, cjsModule, require);
 
-const { readBearerToken, readRequestAccessToken } = cjsModule.exports;
+const { readBearerToken, readRequestAccessToken, readRequestRefreshToken } = cjsModule.exports;
 
 assert.equal(readBearerToken("Bearer abc123"), "abc123");
 assert.equal(readBearerToken("bearer abc123"), "abc123");
@@ -52,5 +59,14 @@ assert.equal(
   ),
   "header-token",
 );
+assert.equal(
+  readRequestRefreshToken(
+    new Request("http://localhost/api", {
+      headers: { cookie: "work_up_refresh_token=refresh-cookie-token; other=value" },
+    }),
+  ),
+  "refresh-cookie-token",
+);
+assert.equal(readRequestRefreshToken(new Request("http://localhost/api")), "");
 
 console.log("supabase server helper tests passed");

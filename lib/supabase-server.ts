@@ -38,6 +38,11 @@ export function readRequestAccessToken(request: Request) {
   return cookieToken ? decodeURIComponent(cookieToken) : "";
 }
 
+export function readRequestRefreshToken(request: Request) {
+  const cookieToken = readCookieValue(request.headers.get("cookie"), "work_up_refresh_token");
+  return cookieToken ? decodeURIComponent(cookieToken) : "";
+}
+
 export function getServerSupabase(accessToken?: string) {
   const supabaseUrl = normalizeSupabaseProjectUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const supabaseAnonKey = normalizeEnvText(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);

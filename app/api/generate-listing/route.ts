@@ -12,6 +12,7 @@ import {
   getServerSupabaseAsync,
   hasSupabaseServerEnvAsync,
   readRequestAccessToken,
+  readRequestRefreshToken,
 } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
@@ -112,8 +113,20 @@ export async function POST(request: Request) {
 
     if (await hasSupabaseServerEnvAsync()) {
       const accessToken = readRequestAccessToken(request);
+      const refreshToken = readRequestRefreshToken(request);
 
       if (!accessToken) {
+        console.log("[generate-listing-auth]", {
+          projectId: projectId || "",
+          requiresProjectAuth,
+          hasAccessToken: false,
+          hasRefreshToken: Boolean(refreshToken),
+          getUserSuccess: false,
+          userIdExists: false,
+          projectOwnerIdExists: false,
+          authFailureReason: "missing_access_token",
+        });
+
         return NextResponse.json(
           { ok: false, error: "请先登录后再生成 Listing。" },
           { status: 401 },
@@ -122,15 +135,27 @@ export async function POST(request: Request) {
 
       const supabase = await getServerSupabaseAsync(accessToken);
       const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
+      const authedUser = userError ? null : userData.user;
 
-      if (userError || !userData.user) {
+      if (!authedUser) {
+        console.log("[generate-listing-auth]", {
+          projectId: projectId || "",
+          requiresProjectAuth,
+          hasAccessToken: true,
+          hasRefreshToken: Boolean(refreshToken),
+          getUserSuccess: false,
+          userIdExists: false,
+          projectOwnerIdExists: false,
+          authFailureReason: "get_user_failed",
+        });
+
         return NextResponse.json(
           { ok: false, error: "登录状态已失效，请重新登录。" },
           { status: 401 },
         );
       }
 
-      userId = userData.user.id;
+      userId = authedUser.id;
 
       if (projectId && projectId !== "demo") {
         const { data: project, error: projectError } = await supabase
@@ -144,11 +169,33 @@ export async function POST(request: Request) {
         }
 
         if (!project) {
+          console.log("[generate-listing-auth]", {
+            projectId,
+            requiresProjectAuth,
+            hasAccessToken: true,
+            hasRefreshToken: Boolean(refreshToken),
+            getUserSuccess: true,
+            userIdExists: Boolean(userId),
+            projectOwnerIdExists: false,
+            authFailureReason: "project_not_found_or_not_owned",
+          });
+
           return NextResponse.json(
             { ok: false, error: "没有找到这个项目，或当前账号无权访问。" },
             { status: 404 },
           );
         }
+
+        console.log("[generate-listing-auth]", {
+          projectId,
+          requiresProjectAuth,
+          hasAccessToken: true,
+          hasRefreshToken: Boolean(refreshToken),
+          getUserSuccess: true,
+          userIdExists: Boolean(userId),
+          projectOwnerIdExists: isRecord(project) && typeof project.user_id === "string",
+          authFailureReason: "",
+        });
 
         projectData = project;
       }

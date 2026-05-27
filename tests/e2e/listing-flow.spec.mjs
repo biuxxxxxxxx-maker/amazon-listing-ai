@@ -224,6 +224,7 @@ test.describe("listing creation and generation flow", () => {
       generationRequests.push({
         url: route.request().url(),
         body: route.request().postDataJSON(),
+        authorization: route.request().headers().authorization || "",
       });
       await route.fulfill({
         status: 200,
@@ -300,6 +301,7 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByText("DeepSeek generated", { exact: true })).toBeVisible();
     expect(generationRequests).toHaveLength(1);
     expect(generationRequests[0].body.projectId).toBe("e2e-project");
+    expect(generationRequests[0].authorization).toMatch(/^Bearer\s+e2e-access-token/);
     expect(JSON.stringify(generationRequests[0].body)).toContain("行李箱");
     await expect(page.getByRole("heading", { name: "Final Amazon Listing" })).toBeVisible();
     await expect(page.locator("#title").getByText("Amazon Title")).toBeVisible();

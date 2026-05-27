@@ -18,6 +18,9 @@ let deepSeekCallCount = 0;
 let lastContextInput = null;
 let lastDeepSeekInput = null;
 let shouldThrowGenerationError = false;
+let getServerSupabaseCallCount = 0;
+let getUserCallCount = 0;
+let projectReadCallCount = 0;
 
 const productBrief = {
   schemaVersion: "workup.v1",
@@ -202,10 +205,67 @@ const require = (specifier) => {
         checkedSupabaseEnv = true;
         return true;
       },
-      getServerSupabaseAsync: async () => {
-        throw new Error("Supabase should not be called for demo requests.");
+      getServerSupabaseAsync: async (accessToken) => {
+        getServerSupabaseCallCount += 1;
+        assert.equal(accessToken, "header-token");
+
+        return {
+          auth: {
+            getUser: async (token) => {
+              getUserCallCount += 1;
+              assert.equal(token, "header-token");
+
+              return {
+                data: { user: { id: "user-1" } },
+                error: null,
+              };
+            },
+          },
+          from: (table) => {
+            assert.equal(table, "product_projects");
+
+            return {
+              select: () => ({
+                eq: (field, value) => {
+                  assert.equal(field, "id");
+                  assert.equal(value, "real-project");
+
+                  return {
+                    maybeSingle: async () => {
+                      projectReadCallCount += 1;
+
+                      return {
+                        data: {
+                          id: "real-project",
+                          user_id: "user-1",
+                          product_name_cn: "行李箱",
+                          marketplace: "US",
+                          category: "Travel & Luggage",
+                          form_data: {
+                            color: "黑色",
+                            material: "ABS",
+                          },
+                        },
+                        error: null,
+                      };
+                    },
+                  };
+                },
+              }),
+            };
+          },
+        };
       },
-      readRequestAccessToken: () => "",
+      readRequestAccessToken: (request) => {
+        const authorization = request.headers.get("authorization") || "";
+        return authorization.toLowerCase().startsWith("bearer ")
+          ? authorization.slice("bearer ".length).trim()
+          : "";
+      },
+      readRequestRefreshToken: (request) =>
+        request.headers.get("cookie")?.includes("work_up_refresh_token=")
+          ? "refresh-token"
+          : "",
     };
   }
 
@@ -251,6 +311,32 @@ assert.equal(lastDeepSeekInput.productBrief.product.nameCn, "行李箱");
 assert.equal(lastDeepSeekInput.competitorInsights, competitorInsights);
 assert.equal(lastDeepSeekInput.listingStrategy, listingStrategy);
 assert.equal(lastDeepSeekInput.prompt.promptVersion, "workup-listing-v1");
+
+const authedResponse = await cjsModule.exports.POST(
+  new Request("http://localhost/api/generate-listing", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: "Bearer header-token",
+      cookie: "work_up_refresh_token=refresh-token",
+    },
+    body: JSON.stringify({
+      projectId: "real-project",
+      projectData: {},
+    }),
+  }),
+);
+const authedBody = await authedResponse.json();
+
+assert.equal(authedResponse.status, 200);
+assert.equal(authedBody.ok, true);
+assert.equal(authedBody.source, "deepseek");
+assert.equal(getServerSupabaseCallCount, 1);
+assert.equal(getUserCallCount, 1);
+assert.equal(projectReadCallCount, 1);
+assert.equal(lastContextInput.projectId, "real-project");
+assert.equal(lastContextInput.userId, "user-1");
+assert.equal(lastContextInput.projectData.id, "real-project");
 
 shouldThrowGenerationError = true;
 const errorResponse = await cjsModule.exports.POST(

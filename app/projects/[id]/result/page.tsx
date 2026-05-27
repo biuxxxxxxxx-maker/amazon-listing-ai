@@ -334,12 +334,24 @@ export default function ResultPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), 30000);
 
     try {
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+      };
+
+      if (supabaseReady) {
+        const { data: sessionData } = await getBrowserSupabase().auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        if (accessToken) {
+          headers.authorization = `Bearer ${accessToken}`;
+        }
+      }
+
       const response = await fetch("/api/generate-listing", {
         method: "POST",
+        credentials: "same-origin",
         signal: controller.signal,
-        headers: {
-          "content-type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           projectId,
           projectData,
