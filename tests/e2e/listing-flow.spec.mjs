@@ -453,9 +453,10 @@ test.describe("listing creation and generation flow", () => {
     await page.getByTestId("regenerate-listing-button").click();
     await expect(
       page.getByRole("heading", {
-        name: "这是旧版本生成结果，请重新生成以获得 Work UP 新版 Listing。",
+        name: "请重新生成新版 Listing",
       }),
     ).toBeVisible();
+    await expect(page.getByText("这个结果来自旧版结构，无法按 Work UP 新版 Listing 格式展示。")).toBeVisible();
     await expect(page.getByText("Final Amazon Listing")).toHaveCount(0);
     await expect(page.getByText("Lightweight Carry-On Suitcase for Weekend Trips and Business Travel")).toHaveCount(0);
     expect(savedGenerationRows).toHaveLength(0);

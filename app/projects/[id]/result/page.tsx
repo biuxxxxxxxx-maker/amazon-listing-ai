@@ -28,7 +28,9 @@ import {
 import { getBrowserSupabase } from "@/lib/supabase-browser";
 import type { GenerationInputSnapshot, GenerationResult } from "@/lib/workup-schema";
 
-const oldResultMessage = "这是旧版本生成结果，请重新生成以获得 Work UP 新版 Listing。";
+const oldResultMessage = "请重新生成新版 Listing";
+const oldResultDescription =
+  "这个结果来自旧版结构，无法按 Work UP 新版 Listing 格式展示。点击重新生成后，系统会基于当前项目资料生成包含 Final Listing、资料质量、策略、缺失信息和合规提醒的新结果。";
 const emptyResultMessage = "尚未生成 Listing，请点击重新生成。";
 const loadingMessage = "正在基于产品资料、竞品洞察和 Listing 策略生成...";
 
@@ -1040,8 +1042,9 @@ function EmptyResultState({ state }: { state: ResultState }) {
       <Badge tone="warm">{state === "old" ? "旧版本结果" : "Not Generated"}</Badge>
       <h2 className="mt-4 text-xl font-semibold text-ink">{message}</h2>
       <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-neutral-600">
-        Work UP 新版结果必须包含 source: deepseek、schemaVersion: workup.v1 和完整
-        finalListing。旧 mock 或旧 schema 不会作为成功结果展示，也不会保存。
+        {state === "old"
+          ? oldResultDescription
+          : "点击重新生成后，Work UP 会基于当前项目资料输出 Final Listing、资料质量、策略、缺失信息和合规提醒。"}
       </p>
     </Card>
   );

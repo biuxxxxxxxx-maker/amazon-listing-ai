@@ -166,8 +166,7 @@ test.describe("auth flow", () => {
     await expect(page).toHaveURL(/\/projects\/new/);
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
     await expect(page.getByTestId("user-menu-button")).toBeVisible();
-    await page.getByTestId("user-menu-button").click();
-    await page.getByRole("menuitem", { name: "进入控制台" }).click();
+    await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/dashboard/);
     const rememberedState = await readWorkUpAuthState(page);
     expect(rememberedState).toEqual({

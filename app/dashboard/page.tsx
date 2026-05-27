@@ -4,25 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
   CalendarClock,
-  Clock3,
+  ClipboardList,
   FileText,
-  Image,
-  ListChecks,
-  Search,
+  Plus,
+  RefreshCw,
   Sparkles,
-  Tags,
 } from "lucide-react";
 import { UserMenu } from "@/components/auth/user-menu";
 import { BrandLink } from "@/components/layout/brand-link";
-import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { projects as mockProjects } from "@/lib/mock-data";
-import { mvpTools } from "@/lib/mvp-tools";
 import { getBrowserSupabase } from "@/lib/supabase-browser";
+import { projects as mockProjects } from "@/lib/mock-data";
 import type { Marketplace, Project } from "@/lib/types";
 
 type ProductProjectRow = {
@@ -34,20 +27,6 @@ type ProductProjectRow = {
   created_at: string | null;
   updated_at: string | null;
   status: "Draft" | "Generated" | null;
-};
-
-const workspaceTips = [
-  "先补齐中文资料，再生成英文 Listing",
-  "生成结果会逐段附中文参照",
-  "项目数据已从 Supabase 读取",
-];
-
-const toolIcons = {
-  sparkles: Sparkles,
-  chart: BarChart3,
-  list: ListChecks,
-  tags: Tags,
-  image: Image,
 };
 
 function mapProject(row: ProductProjectRow): Project {
@@ -66,6 +45,47 @@ function mapProject(row: ProductProjectRow): Project {
     updatedAt: row.updated_at?.slice(0, 10) || "",
     status: row.status === "Generated" ? "Generated" : "Draft",
   };
+}
+
+function ProjectStatusBadge({ status }: { status: Project["status"] }) {
+  const isGenerated = status === "Generated";
+
+  return (
+    <span
+      className={
+        isGenerated
+          ? "inline-flex rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
+          : "inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+      }
+    >
+      {status}
+    </span>
+  );
+}
+
+function TopNav() {
+  return (
+    <nav className="flex h-16 items-center justify-between rounded-xl border border-slate-200 bg-white px-4 shadow-sm sm:px-5">
+      <div className="flex items-center gap-6">
+        <BrandLink />
+        <div className="hidden items-center gap-3 text-sm font-medium md:flex">
+          <Link
+            href="/dashboard"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-black px-5 font-semibold text-white shadow-sm transition hover:bg-slate-900"
+          >
+            控制台
+          </Link>
+          <Link
+            href="/projects/new"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 bg-white/70 px-5 text-slate-700 shadow-sm transition hover:bg-white hover:text-slate-900"
+          >
+            新建 Listing
+          </Link>
+        </div>
+      </div>
+      <UserMenu />
+    </nav>
+  );
 }
 
 export default function DashboardPage() {
@@ -107,7 +127,8 @@ export default function DashboardPage() {
           throw error;
         }
 
-        setDashboardProjects(((data || []) as ProductProjectRow[]).map(mapProject));
+        const rows = Array.isArray(data) ? data : data ? [data] : [];
+        setDashboardProjects((rows as ProductProjectRow[]).map(mapProject));
       } catch (error) {
         setLoadError(
           error instanceof Error
@@ -122,301 +143,179 @@ export default function DashboardPage() {
     loadProjects();
   }, [supabaseReady]);
 
-  const focusProject = dashboardProjects[0] || mockProjects[0];
   const stats = useMemo(
     () => [
       {
         label: "全部项目",
         value: dashboardProjects.length,
-        description: "当前账号下的项目总数",
         icon: FileText,
       },
       {
-        label: "已生成",
-        value: dashboardProjects.filter((project) => project.status === "Generated").length,
-        description: "可直接查看双语 Listing 结果",
-        icon: Sparkles,
+        label: "Draft",
+        value: dashboardProjects.filter((project) => project.status === "Draft").length,
+        icon: ClipboardList,
       },
       {
-        label: "草稿",
-        value: dashboardProjects.filter((project) => project.status === "Draft").length,
-        description: "可继续补充资料并生成",
-        icon: Clock3,
+        label: "Generated",
+        value: dashboardProjects.filter((project) => project.status === "Generated").length,
+        icon: Sparkles,
       },
     ],
     [dashboardProjects],
   );
 
   return (
-    <main className="min-h-screen px-5 py-6 sm:px-8 lg:px-10">
-      <div className="mx-auto max-w-7xl">
-        <nav className="mb-10 flex items-center justify-between">
-          <BrandLink />
-          <UserMenu />
-        </nav>
+    <main className="min-h-screen bg-paper px-5 py-5 sm:px-8 lg:px-10">
+      <div className="mx-auto max-w-6xl">
+        <TopNav />
 
-        <PageHeader
-          title="项目工作台"
-          description="查看历史项目、继续编辑草稿，或进入 MVP 功能页体验前端 mock 生成流程。"
-          action={
-            <Link href="/projects/new">
-              <Button size="lg">
-                新建 Listing
-                <ArrowRight className="size-4" />
-              </Button>
-            </Link>
-          }
-        />
-
-        {created ? (
-          <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
-            Draft 项目已保存，并会出现在下方真实项目列表中。
-          </div>
-        ) : null}
-
-        {loadError ? (
-          <div className="mt-6 rounded-lg border border-orange-200 bg-amberSoft p-4 text-sm leading-6 text-[#8a5a1e]">
-            {loadError}
-          </div>
-        ) : null}
-
-        <section className="mt-8">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">MVP 功能入口</h2>
-              <p className="mt-1 text-sm leading-6 text-neutral-500">
-                每个功能页都先提供前端输入、生成按钮、loading 状态和 mock 结果。
+        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">
+                Dashboard
+              </p>
+              <h1 className="mt-3 text-2xl font-bold text-slate-900 sm:text-3xl">
+                欢迎回来
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                继续编辑项目，或创建新的 Amazon Listing。Work UP 会帮你把中文资料转成英文 Listing，并提示缺失信息和合规风险。
               </p>
             </div>
-            <Badge tone="warm">Frontend Mock</Badge>
+            <Link href="/projects/new" className="w-full sm:w-auto">
+              <Button className="h-12 w-full rounded-lg bg-indigo-600 px-5 text-white shadow-sm hover:bg-indigo-700 sm:w-auto">
+                <Plus className="size-4" />
+                新建 Listing
+              </Button>
+            </Link>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            {mvpTools.map((tool) => {
-              const Icon = toolIcons[tool.icon];
 
-              return (
-                <Link key={tool.slug} href={`/${tool.slug}`}>
-                  <Card className="h-full p-4 transition hover:-translate-y-0.5 hover:shadow-soft">
-                    <div className="grid size-10 place-items-center rounded-lg bg-neutral-100 text-ink">
-                      <Icon className="size-4" />
-                    </div>
-                    <h3 className="mt-4 text-sm font-semibold text-ink">{tool.titleCn}</h3>
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-neutral-600">
-                      {tool.description}
-                    </p>
-                    <p className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-ink">
-                      打开
-                      <ArrowRight className="size-4" />
-                    </p>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
+          {created ? (
+            <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
+              Draft 项目已保存，并会出现在下方最近项目列表中。
+            </div>
+          ) : null}
+
+          {loadError ? (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+              {loadError}
+            </div>
+          ) : null}
         </section>
 
-        <section className="mt-8 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="overflow-hidden">
-            <div className="border-b border-line bg-white px-5 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-500">
-                    {dashboardProjects.length > 0 ? "最近项目" : "项目起点"}
-                  </p>
-                  <h2 className="mt-1 text-2xl font-semibold text-ink">
-                    {dashboardProjects.length > 0 ? focusProject.productNameCn : "还没有真实项目"}
-                  </h2>
-                </div>
-                <Badge tone={dashboardProjects.length > 0 ? "green" : "neutral"}>
-                  {dashboardProjects.length > 0 ? focusProject.status : "Empty"}
-                </Badge>
-              </div>
-            </div>
-            <div className="grid gap-5 p-5 md:grid-cols-[1fr_0.82fr]">
-              <div>
-                <p className="text-sm leading-6 text-neutral-600">
-                  {dashboardProjects.length > 0
-                    ? "这个项目已保存到 Supabase。后续接入 DeepSeek 后，可以在这里生成和查看双语 Listing。"
-                    : "先创建一个 Amazon Listing 项目，保存后会显示在真实项目列表里。"}
-                </p>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  {[
-                    ["站点", `Amazon ${focusProject.marketplace}`],
-                    ["类目", focusProject.category],
-                    ["更新", focusProject.updatedAt || "-"],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg bg-paper p-3">
-                      <p className="text-xs font-semibold text-neutral-400">{label}</p>
-                      <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-lg border border-line bg-paper p-4">
-                <p className="text-sm font-semibold text-ink">下一步建议</p>
-                <div className="mt-3 space-y-3">
-                  {workspaceTips.map((tip) => (
-                    <div key={tip} className="flex gap-2 text-sm leading-6 text-neutral-600">
-                      <ArrowRight className="mt-1 size-4 shrink-0 text-gold" />
-                      <span>{tip}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link
-                  href={dashboardProjects.length > 0 ? `/projects/${focusProject.id}/result` : "/projects/new"}
-                  className="mt-5 block"
-                >
-                  <Button className="w-full">
-                    {dashboardProjects.length > 0 ? "查看结果页" : "新建 Listing"}
-                    <ArrowRight className="size-4" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-neutral-500">工作区状态</p>
-                <h2 className="mt-1 text-2xl font-semibold text-ink">
-                  {supabaseReady ? "Supabase Workspace" : "Mock Workspace"}
-                </h2>
-              </div>
-              <div className="grid size-11 place-items-center rounded-lg bg-amberSoft text-[#8a5a1e]">
-                <Sparkles className="size-5" />
-              </div>
-            </div>
-            <div className="mt-5 space-y-3">
-              {[
-                ["当前阶段", supabaseReady ? "浏览器端 Auth + Draft 保存" : "高质量 UI 与 mock 数据"],
-                ["数据状态", isLoading ? "正在读取项目" : supabaseReady ? "读取 product_projects" : "未配置 .env.local"],
-                ["AI 阶段", "下一步接入 DeepSeek Listing 生成接口"],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-white p-3">
-                  <p className="text-sm text-neutral-500">{label}</p>
-                  <p className="text-sm font-semibold text-ink">{value}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </section>
-
-        <section className="mt-5 grid gap-4 sm:grid-cols-3">
+        <section className="mt-6 grid gap-4 sm:grid-cols-3">
           {stats.map((stat) => {
             const Icon = stat.icon;
 
             return (
-              <Card key={stat.label} className="p-4 sm:p-5">
-                <div className="flex items-start justify-between gap-4">
+              <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-neutral-500">{stat.label}</p>
-                    <p className="mt-2 text-3xl font-semibold text-ink">{stat.value}</p>
-                    <p className="mt-2 text-sm leading-6 text-neutral-500">{stat.description}</p>
+                    <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                    <p className="mt-2 text-3xl font-bold text-slate-900">{stat.value}</p>
                   </div>
-                  <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-neutral-100 text-ink">
+                  <div className="grid size-10 place-items-center rounded-lg bg-slate-100 text-slate-600">
                     <Icon className="size-4" />
                   </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
         </section>
 
         <section className="mt-8">
-          <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-ink">真实项目</h2>
-              <p className="mt-1 text-sm text-neutral-500">
-                这里读取当前登录用户在 Supabase 中保存的项目。
+              <h2 className="text-lg font-semibold text-slate-900">最近项目</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                查看 Draft 和 Generated 项目，继续编辑或进入结果页。
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex h-10 items-center gap-2 rounded-full border border-line bg-white px-3 text-sm text-neutral-500 shadow-hairline">
-                <Search className="size-4" />
-                搜索项目
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
-                {["全部", "Draft", "Generated", "Amazon US"].map((filter, index) => (
-                  <button
-                    key={filter}
-                    type="button"
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                      index === 0
-                        ? "border-ink bg-ink text-white"
-                        : "border-line bg-white text-neutral-600 hover:border-neutral-300 hover:text-ink"
-                    }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <span className="text-sm text-slate-500">
+              {supabaseReady ? "Supabase projects" : "Preview projects"}
+            </span>
           </div>
 
           {isLoading ? (
-            <Card className="p-6 text-sm leading-6 text-neutral-600">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600 shadow-sm">
               正在读取 Supabase 项目...
-            </Card>
+            </div>
           ) : null}
 
           {!isLoading && dashboardProjects.length === 0 ? (
-            <Card className="p-6 text-sm leading-6 text-neutral-600">
-              还没有项目。点击右上角“新建 Listing”，创建第一个 Amazon 产品项目。
-            </Card>
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+              <div className="mx-auto grid size-12 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
+                <FileText className="size-5" />
+              </div>
+              <h3 className="mt-5 text-xl font-semibold text-slate-900">
+                创建你的第一个 Amazon Listing
+              </h3>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600">
+                输入中文产品资料，Work UP 会生成英文 Listing 并提示缺失信息和合规风险。
+              </p>
+              <Link href="/projects/new" className="mt-6 inline-flex">
+                <Button className="rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                  新建 Listing
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+            </div>
           ) : null}
 
           <div className="grid gap-4">
             {dashboardProjects.map((project) => (
-              <Card key={project.id} className="overflow-hidden">
-                <div className="grid gap-4 p-5 lg:grid-cols-[1.25fr_0.75fr_0.6fr_0.75fr_auto] lg:items-center">
-                  <div>
+              <div
+                key={project.id}
+                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-indigo-200 sm:p-5"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-ink">{project.productNameCn}</h2>
-                      <Badge tone={project.status === "Generated" ? "green" : "neutral"}>
-                        {project.status}
-                      </Badge>
+                      <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
+                        {project.productNameCn}
+                      </h3>
+                      <ProjectStatusBadge status={project.status} />
                     </div>
-                    <p className="mt-1 text-sm text-neutral-500">{project.productNameEn || "英文名待生成"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-neutral-400">类目</p>
-                    <p className="mt-1 text-sm font-medium text-ink">{project.category}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-neutral-400">站点</p>
-                    <p className="mt-1 text-sm font-medium text-ink">Amazon {project.marketplace}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-neutral-400">更新时间</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-ink">
-                      <CalendarClock className="size-4 text-neutral-400" />
-                      {project.updatedAt || "-"}
+                    <p className="mt-2 text-sm text-slate-500">
+                      Amazon {project.marketplace} / {project.category}
+                    </p>
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-slate-500">
+                      <CalendarClock className="size-4" />
+                      Updated {project.updatedAt || "-"}
                     </p>
                   </div>
-                  <Link href={project.status === "Generated" ? `/projects/${project.id}/result` : "/projects/new"}>
-                    <Button
-                      variant={project.status === "Generated" ? "primary" : "secondary"}
-                      className="w-full lg:w-auto"
-                    >
-                      {project.status === "Generated" ? "查看结果" : "继续编辑"}
-                      <ArrowRight className="size-4" />
-                    </Button>
-                  </Link>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    {project.status === "Draft" ? (
+                      <Link href="/projects/new" className="w-full sm:w-auto">
+                        <Button
+                          variant="secondary"
+                          className="h-10 w-full rounded-lg border-slate-300 text-slate-700 sm:w-auto"
+                        >
+                          继续编辑
+                          <ArrowRight className="size-4" />
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Link href={`/projects/${project.id}/result`} className="w-full sm:w-auto">
+                        <Button className="h-10 w-full rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 sm:w-auto">
+                          查看结果
+                          <ArrowRight className="size-4" />
+                        </Button>
+                      </Link>
+                    )}
+                    <Link href={`/projects/${project.id}/result`} className="w-full sm:w-auto">
+                      <Button
+                        variant="secondary"
+                        className="h-10 w-full rounded-lg border-slate-300 text-slate-700 sm:w-auto"
+                      >
+                        <RefreshCw className="size-4" />
+                        重新生成
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-                <div className="border-t border-line bg-paper px-5 py-3">
-                  <div className="flex flex-col gap-2 text-sm text-neutral-600 sm:flex-row sm:items-center sm:justify-between">
-                    <p>
-                      {project.status === "Generated"
-                        ? "已生成双语 Listing，可查看、复制或重新生成。"
-                        : "草稿已保存，后续可接入 DeepSeek 生成双语 Listing。"}
-                    </p>
-                    <p className="text-xs font-semibold text-neutral-400">
-                      Created {project.createdAt || "-"}
-                    </p>
-                  </div>
-                </div>
-              </Card>
+              </div>
             ))}
           </div>
         </section>

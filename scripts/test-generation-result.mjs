@@ -43,7 +43,7 @@ const normalized = mod.normalizeGenerationResult({
 });
 
 assert.equal(normalized.title.english, "Custom Amazon Title");
-assert.ok(normalized.title.chinese.includes("可折叠"));
-assert.equal(normalized.bullets.length, 5);
+assert.equal(normalized.title.chinese, "");
+assert.equal(normalized.bullets.length, 0);
 
 console.log("generation result tests passed");

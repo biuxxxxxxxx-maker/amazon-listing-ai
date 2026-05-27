@@ -153,14 +153,14 @@ export function UserMenu({ className }: UserMenuProps) {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((current) => !current)}
-        className="inline-flex h-10 max-w-[13rem] items-center gap-2 rounded-full border border-line bg-white px-2.5 pr-3 text-sm font-medium text-ink shadow-hairline transition hover:border-neutral-300 hover:bg-neutral-50"
+        className="inline-flex h-11 max-w-[13rem] items-center gap-2 rounded-full border border-slate-200 bg-white px-2 pr-3 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50"
       >
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-ink text-xs font-semibold text-white">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-black text-xs font-semibold text-white">
           {initial}
         </span>
-        <span className="min-w-0 truncate">{displayName}</span>
+        <span className="hidden min-w-0 truncate sm:block">{displayName}</span>
         <ChevronDown
-          className={cn("size-4 shrink-0 text-neutral-500 transition", {
+          className={cn("size-4 shrink-0 text-slate-500 transition", {
             "rotate-180": isOpen,
           })}
         />
@@ -170,23 +170,22 @@ export function UserMenu({ className }: UserMenuProps) {
         <div
           role="menu"
           data-testid="user-menu-dropdown"
-          className="absolute right-0 top-12 w-56 overflow-hidden rounded-lg border border-line bg-white p-1.5 shadow-[0_18px_50px_rgba(23,23,23,0.14)]"
+          className="absolute right-0 top-12 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
         >
           <Link
             href="/dashboard"
             role="menuitem"
-            className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium text-ink transition hover:bg-neutral-100"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             onClick={() => setIsOpen(false)}
           >
-            <LayoutDashboard className="size-4 text-neutral-500" />
+            <LayoutDashboard className="size-4" />
             进入控制台
           </Link>
-          {/* TODO: Add a dedicated /settings page before enabling this menu item. */}
           <button
             type="button"
             role="menuitem"
             disabled
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium text-neutral-400"
+            className="flex w-full cursor-not-allowed items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-400"
           >
             <Settings className="size-4" />
             个人设置
@@ -194,7 +193,7 @@ export function UserMenu({ className }: UserMenuProps) {
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium text-[#8a3b12] transition hover:bg-amberSoft"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
             onClick={signOut}
           >
             <LogOut className="size-4" />

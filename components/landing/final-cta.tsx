@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 
 const ctaPoints = [
   { label: "Amazon 专用流程", icon: ShieldCheck },
-  { label: "完整双语结果", icon: Languages },
+  { label: "中英文分离", icon: Languages },
   { label: "可复制可保存", icon: Files },
 ];
 
@@ -23,10 +23,10 @@ export function FinalCta({ isGenerating = false, onGenerate }: FinalCtaProps) {
           <div>
             <p className="text-sm font-semibold text-orange-200">Work UP</p>
             <h2 className="mt-3 max-w-3xl text-3xl font-semibold sm:text-4xl">
-              让第一次写 Amazon Listing，也能知道每句话为什么这样写。
+              把中文资料整理成更接近运营思维的 Amazon Listing。
             </h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-neutral-300">
-              第一阶段为 mock 流程，后续会接入 Supabase 保存项目，并用 DeepSeek 生成真实结果。
+              从资料质量、竞品机会到合规边界，Work UP 帮你生成英文成品，也解释每个模块为什么这样写。
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               {ctaPoints.map((point) => {
@@ -47,12 +47,12 @@ export function FinalCta({ isGenerating = false, onGenerate }: FinalCtaProps) {
           <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-neutral-100">
               <CheckCircle2 className="size-4 text-orange-200" />
-              当前 mock 流程可体验
+              适合上新前快速整理
             </div>
             <div className="mt-4 space-y-3 text-sm leading-6 text-neutral-300">
-              <p>1. 创建产品项目</p>
-              <p>2. 按步骤填写中文资料</p>
-              <p>3. 查看英文 Listing + 中文解释</p>
+              <p>1. 输入中文产品资料</p>
+              <p>2. 补充竞品线索与买家痛点</p>
+              <p>3. 复制英文 Listing 到 Amazon 后台</p>
             </div>
             <Button
               data-testid="start-listing-footer-cta"

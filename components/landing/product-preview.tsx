@@ -54,7 +54,7 @@ export function ProductPreview({
           <div className="flex items-center gap-2">
             <Badge tone="neutral">Amazon US</Badge>
             <Badge tone={isGenerating ? "warm" : demoMode ? "neutral" : "green"}>
-              {isGenerating ? "Generating" : demoMode ? "Demo" : "Generated"}
+              {isGenerating ? "Generating" : demoMode ? "Preview" : "Generated"}
             </Badge>
           </div>
         </div>
@@ -106,7 +106,7 @@ export function ProductPreview({
             ) : null}
             {demoMode ? (
               <div className="mt-3 rounded-lg border border-orange-200 bg-amberSoft p-3 text-xs leading-5 text-[#8a5a1e]">
-                演示模式：未连接真实 AI
+                示例预览：用于说明输出结构。
               </div>
             ) : null}
             {errorMessage ? (
@@ -120,7 +120,7 @@ export function ProductPreview({
                 <div className="grid min-h-48 place-items-center rounded-lg bg-paper text-sm text-neutral-600">
                   <div className="flex items-center gap-2">
                     <Loader2 className="size-4 animate-spin" />
-                    正在调用 DeepSeek 生成 Listing...
+                    正在整理 Listing 输出...
                   </div>
                 </div>
               ) : null}

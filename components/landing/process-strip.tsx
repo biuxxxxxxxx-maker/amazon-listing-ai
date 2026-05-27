@@ -1,10 +1,10 @@
 const steps = [
-  ["产品资料输入", "用中文整理产品、场景、竞品和评论，不需要一开始就会写英文。"],
-  ["卖点分析", "先看产品适合卖给谁、解决什么问题、哪些表达需要谨慎。"],
-  ["地道翻译", "把中文资料改写成 Amazon 买家更熟悉的自然英文。"],
-  ["Listing 生成", "生成标题、五点描述、商品描述、FAQ 和关键词。"],
-  ["中文参照解释", "每段英文下方都有中文解释，新手知道每句话在卖什么。"],
-  ["复制使用", "结果可分模块复制，也可以一键复制完整 Listing。"],
+  ["产品资料输入", "用中文整理产品、场景、材质、尺寸、卖点和供应商描述。"],
+  ["资料质量检查", "判断哪些信息足够支撑 Listing，哪些关键信息还缺失。"],
+  ["竞品与痛点分析", "从竞品标题、五点和评论痛点中提炼关键词、机会和风险。"],
+  ["Listing 策略生成", "确定主关键词、卖点排序、可用表达和需要避开的 claim。"],
+  ["英文 Listing 输出", "生成 Title、5 Bullet Points、Product Description 和 Search Terms。"],
+  ["中文解释与复制", "每个英文模块都有中文解释，复制时只复制英文成品。"],
 ];
 
 export function ProcessStrip() {
@@ -19,7 +19,7 @@ export function ProcessStrip() {
             </h2>
           </div>
           <p className="text-sm leading-6 text-neutral-600 lg:text-right">
-            从资料整理到 Listing 输出，每一步都围绕 Amazon 新手最容易卡住的环节设计。
+            每一步都围绕真实资料、运营判断和合规边界，避免凭空编造卖点。
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
