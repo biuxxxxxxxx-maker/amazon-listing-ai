@@ -7,9 +7,19 @@ import {
   mockSupabaseProjectApi,
 } from "./helpers.mjs";
 
+async function readWorkUpAuthState(page) {
+  return page.evaluate(() => ({
+    rememberLocal: window.localStorage.getItem("work_up_remember_me"),
+    rememberSession: window.sessionStorage.getItem("work_up_remember_me"),
+    hasAccessCookie: document.cookie.includes("work_up_access_token="),
+    hasRefreshCookie: document.cookie.includes("work_up_refresh_token="),
+  }));
+}
+
 test.describe("auth flow", () => {
   test("login page renders login and signup controls", async ({ page }) => {
     await page.goto("/login");
+    await expect(page.getByText("正在恢复登录状态...")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "登录 / 注册" })).toBeVisible();
     await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
     await expect(page.getByPlaceholder("输入密码，至少 6 位")).toBeVisible();
@@ -145,16 +155,16 @@ test.describe("auth flow", () => {
     await page.goto("/projects/new");
     await expect(page).toHaveURL(/\/projects\/new/);
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
-    const rememberedState = await page.evaluate(() => ({
-      rememberMe: window.localStorage.getItem("work_up_remember_me"),
-      hasAccessCookie: document.cookie.includes("work_up_access_token="),
-      hasRefreshCookie: document.cookie.includes("work_up_refresh_token="),
-    }));
+    const rememberedState = await readWorkUpAuthState(page);
     expect(rememberedState).toEqual({
-      rememberMe: "true",
+      rememberLocal: "true",
+      rememberSession: null,
       hasAccessCookie: true,
       hasRefreshCookie: true,
     });
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/dashboard/);
   });
 
   test("sign out clears Work UP auth cookies and remember-me state", async ({
@@ -182,18 +192,30 @@ test.describe("auth flow", () => {
     await page.getByRole("button", { name: "退出登录" }).click();
     await expect(page).toHaveURL(/\/login/);
 
-    const clearedState = await page.evaluate(() => ({
-      rememberLocal: window.localStorage.getItem("work_up_remember_me"),
-      rememberSession: window.sessionStorage.getItem("work_up_remember_me"),
-      hasAccessCookie: document.cookie.includes("work_up_access_token="),
-      hasRefreshCookie: document.cookie.includes("work_up_refresh_token="),
-    }));
+    const clearedState = await readWorkUpAuthState(page);
     expect(clearedState).toEqual({
       rememberLocal: null,
       rememberSession: null,
       hasAccessCookie: false,
       hasRefreshCookie: false,
     });
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId("auth-email-input")).toBeVisible();
+  });
+
+  test("login page shows the form when there is no recoverable session", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the browser client.");
+
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByTestId("auth-email-input")).toBeVisible();
+    await expect(page.getByLabel("保持登录状态")).toBeChecked();
   });
 
   test("unchecked remember me keeps auth state session-only", async ({

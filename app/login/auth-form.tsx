@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,47 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
   const [notice, setNotice] = useState("");
   const [loadingMode, setLoadingMode] = useState<AuthMode | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
+  const [isCheckingSession, setIsCheckingSession] = useState(
+    initialMode === "signin" && supabaseReady,
+  );
+
+  useEffect(() => {
+    if (initialMode !== "signin" || !supabaseReady) {
+      setIsCheckingSession(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function restoreSession() {
+      try {
+        const supabase = getBrowserSupabase();
+        const { data } = await supabase.auth.getSession();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (data.session?.access_token) {
+          syncWorkUpAuthCookies(data.session);
+          window.location.href = "/dashboard";
+          return;
+        }
+      } catch {
+        // Fall through to the normal login form if browser session recovery fails.
+      }
+
+      if (isMounted) {
+        setIsCheckingSession(false);
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [initialMode, supabaseReady]);
 
   async function submitAuth(form: HTMLFormElement, mode: AuthMode) {
     setError("");
@@ -128,6 +169,14 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
     }
 
     await submitAuth(formRef.current, "signup");
+  }
+
+  if (isCheckingSession) {
+    return (
+      <div className="px-6 py-6 text-sm leading-6 text-neutral-600 sm:px-8">
+        正在恢复登录状态...
+      </div>
+    );
   }
 
   return (
