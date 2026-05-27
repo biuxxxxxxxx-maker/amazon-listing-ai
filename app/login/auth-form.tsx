@@ -5,7 +5,11 @@ import Link from "next/link";
 import { ArrowRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getBrowserSupabase } from "@/lib/supabase-browser";
+import {
+  getBrowserSupabase,
+  setRememberMePreference,
+  syncWorkUpAuthCookies,
+} from "@/lib/supabase-browser";
 
 type AuthMode = "signin" | "signup";
 
@@ -15,11 +19,13 @@ type SupabaseSession = {
   expires_in?: number;
 };
 
-function setCookie(name: string, value: string, maxAge: number) {
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax`;
-}
-
-async function requestSupabaseAuth(mode: AuthMode, email: string, password: string) {
+async function requestSupabaseAuth(
+  mode: AuthMode,
+  email: string,
+  password: string,
+  rememberMe: boolean,
+) {
+  setRememberMePreference(rememberMe);
   const supabase = getBrowserSupabase();
   const result =
     mode === "signin"
@@ -71,6 +77,7 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loadingMode, setLoadingMode] = useState<AuthMode | null>(null);
+  const [rememberMe, setRememberMe] = useState(true);
 
   async function submitAuth(form: HTMLFormElement, mode: AuthMode) {
     setError("");
@@ -93,18 +100,14 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
     setLoadingMode(mode);
 
     try {
-      const session = await requestSupabaseAuth(mode, email, password);
+      const session = await requestSupabaseAuth(mode, email, password, rememberMe);
 
       if (!session.access_token) {
         setNotice("注册成功，请检查邮箱完成验证后再登录。");
         return;
       }
 
-      setCookie("work_up_access_token", session.access_token, session.expires_in || 60 * 60);
-
-      if (session.refresh_token) {
-        setCookie("work_up_refresh_token", session.refresh_token, 60 * 60 * 24 * 30);
-      }
+      syncWorkUpAuthCookies(session, rememberMe);
 
       window.location.href = "/dashboard";
     } catch (authError) {
@@ -162,6 +165,24 @@ export function AuthForm({ initialMode = "signin" }: { initialMode?: AuthMode })
           required
         />
       </label>
+      {initialMode === "signin" ? (
+        <label className="flex items-start gap-3 rounded-lg border border-line bg-white p-3">
+          <input
+            data-testid="remember-me-checkbox"
+            name="remember_me"
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(event) => setRememberMe(event.target.checked)}
+            className="mt-1 size-4 accent-black"
+          />
+          <span>
+            <span className="block text-sm font-semibold text-ink">保持登录状态</span>
+            <span className="mt-1 block text-sm leading-6 text-neutral-600">
+              勾选后，下次打开 Work UP 会自动恢复登录状态。
+            </span>
+          </span>
+        </label>
+      ) : null}
       <Button
         data-testid="auth-submit-button"
         type="submit"

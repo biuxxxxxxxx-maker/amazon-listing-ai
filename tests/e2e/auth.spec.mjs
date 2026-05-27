@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { corsJsonHeaders, getHealth, hasSupabaseEnv, mockSupabaseAuth } from "./helpers.mjs";
+import {
+  corsJsonHeaders,
+  getHealth,
+  hasSupabaseEnv,
+  mockSupabaseAuth,
+  mockSupabaseProjectApi,
+} from "./helpers.mjs";
 
 test.describe("auth flow", () => {
   test("login page renders login and signup controls", async ({ page }) => {
@@ -7,6 +13,8 @@ test.describe("auth flow", () => {
     await expect(page.getByRole("heading", { name: "登录 / 注册" })).toBeVisible();
     await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
     await expect(page.getByPlaceholder("输入密码，至少 6 位")).toBeVisible();
+    await expect(page.getByLabel("保持登录状态")).toBeChecked();
+    await expect(page.getByText("勾选后，下次打开 Work UP 会自动恢复登录状态。")).toBeVisible();
     await expect(page.getByRole("button", { name: "登录" })).toBeVisible();
     await expect(page.getByRole("button", { name: "注册新账号" })).toBeVisible();
   });
@@ -126,11 +134,100 @@ test.describe("auth flow", () => {
     test.skip(!hasSupabaseEnv(health), "Supabase env is required for the browser client.");
 
     await mockSupabaseAuth(page);
+    await mockSupabaseProjectApi(page);
     await page.goto("/login");
     await page.getByTestId("auth-email-input").fill(process.env.E2E_TEST_EMAIL || "e2e@example.com");
     await page.getByTestId("auth-password-input").fill(process.env.E2E_TEST_PASSWORD || "e2e-password");
     await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
+    await page.reload();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/projects/new");
+    await expect(page).toHaveURL(/\/projects\/new/);
+    await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
+    const rememberedState = await page.evaluate(() => ({
+      rememberMe: window.localStorage.getItem("work_up_remember_me"),
+      hasAccessCookie: document.cookie.includes("work_up_access_token="),
+      hasRefreshCookie: document.cookie.includes("work_up_refresh_token="),
+    }));
+    expect(rememberedState).toEqual({
+      rememberMe: "true",
+      hasAccessCookie: true,
+      hasRefreshCookie: true,
+    });
+  });
+
+  test("sign out clears Work UP auth cookies and remember-me state", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the browser client.");
+
+    await mockSupabaseAuth(page);
+    await mockSupabaseProjectApi(page);
+    await page.route("**/auth/v1/logout**", async (route) => {
+      await route.fulfill({
+        status: 204,
+        headers: corsJsonHeaders(),
+        body: "",
+      });
+    });
+
+    await page.goto("/login");
+    await page.getByTestId("auth-email-input").fill("e2e@example.com");
+    await page.getByTestId("auth-password-input").fill("e2e-password");
+    await page.getByTestId("auth-submit-button").click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await page.getByRole("button", { name: "退出登录" }).click();
+    await expect(page).toHaveURL(/\/login/);
+
+    const clearedState = await page.evaluate(() => ({
+      rememberLocal: window.localStorage.getItem("work_up_remember_me"),
+      rememberSession: window.sessionStorage.getItem("work_up_remember_me"),
+      hasAccessCookie: document.cookie.includes("work_up_access_token="),
+      hasRefreshCookie: document.cookie.includes("work_up_refresh_token="),
+    }));
+    expect(clearedState).toEqual({
+      rememberLocal: null,
+      rememberSession: null,
+      hasAccessCookie: false,
+      hasRefreshCookie: false,
+    });
+  });
+
+  test("unchecked remember me keeps auth state session-only", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the browser client.");
+
+    await mockSupabaseAuth(page);
+    await mockSupabaseProjectApi(page);
+    await page.goto("/login");
+    await page.getByLabel("保持登录状态").uncheck();
+    await page.getByTestId("auth-email-input").fill("e2e@example.com");
+    await page.getByTestId("auth-password-input").fill("e2e-password");
+    await page.getByTestId("auth-submit-button").click();
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    const sessionOnlyState = await page.evaluate(() => ({
+      rememberLocal: window.localStorage.getItem("work_up_remember_me"),
+      rememberSession: window.sessionStorage.getItem("work_up_remember_me"),
+      localStorageText: Array.from({ length: window.localStorage.length }, (_, index) => {
+        const key = window.localStorage.key(index) || "";
+        return `${key}:${window.localStorage.getItem(key) || ""}`;
+      }).join("\n"),
+      sessionStorageText: Array.from({ length: window.sessionStorage.length }, (_, index) => {
+        const key = window.sessionStorage.key(index) || "";
+        return `${key}:${window.sessionStorage.getItem(key) || ""}`;
+      }).join("\n"),
+    }));
+    expect(sessionOnlyState.rememberLocal).toBeNull();
+    expect(sessionOnlyState.rememberSession).toBe("false");
+    expect(sessionOnlyState.localStorageText).not.toContain("e2e-refresh-token");
+    expect(sessionOnlyState.sessionStorageText).toContain("e2e-refresh-token");
   });
 
   test("real Supabase login is optional and uses E2E_TEST_EMAIL/E2E_TEST_PASSWORD", async ({

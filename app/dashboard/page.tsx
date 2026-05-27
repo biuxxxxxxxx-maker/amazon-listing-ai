@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { projects as mockProjects } from "@/lib/mock-data";
 import { mvpTools } from "@/lib/mvp-tools";
-import { getBrowserSupabase } from "@/lib/supabase-browser";
+import { clearWorkUpAuthState, getBrowserSupabase } from "@/lib/supabase-browser";
 import type { Marketplace, Project } from "@/lib/types";
 
 type ProductProjectRow = {
@@ -65,11 +65,6 @@ function mapProject(row: ProductProjectRow): Project {
     updatedAt: row.updated_at?.slice(0, 10) || "",
     status: row.status === "Generated" ? "Generated" : "Draft",
   };
-}
-
-function clearAuthCookies() {
-  document.cookie = "work_up_access_token=; path=/; max-age=0; samesite=lax";
-  document.cookie = "work_up_refresh_token=; path=/; max-age=0; samesite=lax";
 }
 
 export default function DashboardPage() {
@@ -132,7 +127,7 @@ export default function DashboardPage() {
         await getBrowserSupabase().auth.signOut();
       }
     } finally {
-      clearAuthCookies();
+      clearWorkUpAuthState();
       window.location.href = "/login";
     }
   }
