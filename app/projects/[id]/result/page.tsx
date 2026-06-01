@@ -122,38 +122,6 @@ function collectGenerationPrerequisites(projectData: ProjectData | null) {
     missing.push("类目");
   }
 
-  const factFields = [
-    "material",
-    "color",
-    "dimensions",
-    "size",
-    "weight",
-    "capacity",
-    "package_quantity",
-    "use_cases",
-    "usage_scenarios",
-    "core_features",
-    "supplier_description",
-    "competitor_title",
-    "competitor_selling_points",
-    "review_pain_points",
-    "differentiation",
-  ];
-
-  const hasProductFact = factFields.some((field) => hasText(getRecordValue(formData, field)));
-
-  if (!hasProductFact) {
-    missing.push("产品基础资料");
-  }
-
-  const hasGenerationSettings =
-    hasText(getRecordValue(formData, "english_style")) &&
-    hasText(getRecordValue(formData, "language"));
-
-  if (!hasGenerationSettings) {
-    missing.push("生成设置");
-  }
-
   return missing;
 }
 

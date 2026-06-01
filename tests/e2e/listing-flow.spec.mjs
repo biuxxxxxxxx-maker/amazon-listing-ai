@@ -400,6 +400,21 @@ const lowInfoProject = {
   status: "Draft",
 };
 
+const minimalRequiredProject = {
+  product_name_cn: "行李箱",
+  product_name_en: "",
+  marketplace: "US",
+  category: "Travel & Luggage",
+  target_price: "",
+  target_customer: "",
+  form_data: {
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+  },
+  status: "Draft",
+};
+
 const highInfoProject = {
   product_name_cn: "20寸登机行李箱",
   product_name_en: "",
@@ -838,6 +853,36 @@ test.describe("listing creation and generation flow", () => {
     await page.getByTestId("regenerate-listing-button").click();
     await expect(page.getByText("生成前缺少必填信息：Amazon 站点。请补齐后再重新生成。")).toBeVisible();
     expect(generationRequests).toHaveLength(0);
+  });
+
+  test("minimal required project can generate without optional product facts", async ({
+    page,
+    request,
+  }) => {
+    const health = await getHealth(request);
+    test.skip(!hasSupabaseEnv(health), "Supabase env is required for the authenticated listing flow.");
+
+    const generationRequests = [];
+
+    await mockSupabaseProjectApi(page, {
+      project: minimalRequiredProject,
+    });
+    await mockGenerationRoute(page, workUpGenerationResult, generationRequests);
+
+    await signInWithMockSession(page);
+    await page.goto("/projects/e2e-project/result");
+    await expect(page.getByText("尚未生成 Listing，请点击重新生成。")).toBeVisible();
+
+    const generationResponse = page.waitForResponse("**/api/generate-listing");
+    await page.getByTestId("regenerate-listing-button").click();
+    await generationResponse;
+
+    expect(generationRequests).toHaveLength(1);
+    expect(generationRequests[0].body.projectData.product_name_cn).toBe("行李箱");
+    expect(generationRequests[0].body.projectData.marketplace).toBe("US");
+    expect(generationRequests[0].body.projectData.category).toBe("Travel & Luggage");
+    await expect(page.getByText("DeepSeek 已生成", { exact: true })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("生成前缺少必填信息");
   });
 
   test("old mock generation response is not displayed as a successful Work UP result", async ({
