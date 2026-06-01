@@ -26,7 +26,7 @@ export default function LoginPage() {
               登录后继续管理你的 Amazon Listing 项目。
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-neutral-600">
-              已进入第二阶段：这里会使用 Supabase Auth 处理邮箱注册、登录和项目保存。
+              使用 Supabase Auth 登录后，可以保存 Draft、查看历史项目，并在结果页调用 DeepSeek 生成正式 Listing。
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <Card className="p-4">
@@ -35,7 +35,7 @@ export default function LoginPage() {
                 </div>
                 <p className="mt-3 text-sm font-semibold text-ink">邮箱登录</p>
                 <p className="mt-1 text-sm leading-6 text-neutral-600">
-                  后续使用 Supabase Auth 管理登录状态。
+                  使用 Supabase Auth 管理登录状态，并支持保持登录。
                 </p>
               </Card>
               <Card className="p-4">
@@ -70,13 +70,13 @@ export default function LoginPage() {
                 <div>
                   <p className="text-sm font-semibold text-ink">当前阶段</p>
                   <p className="mt-1 text-sm leading-6 text-neutral-600">
-                    登录会写入安全会话 cookie；创建 Listing 时会保存 Draft 项目到 Supabase。
+                    登录后可以保存 Draft，并在结果页调用 DeepSeek 生成正式 Listing。
                   </p>
                 </div>
               </div>
             </div>
             <p className="px-6 py-5 text-center text-xs leading-5 text-neutral-500 sm:px-8">
-              登录即表示你同意将项目信息用于生成 Amazon Listing。DeepSeek 生成会在第三阶段启用。
+              登录即表示你同意将项目信息用于生成 Amazon Listing。真实生成失败时会显示错误，不会回退到 mock。
             </p>
           </Card>
         </div>

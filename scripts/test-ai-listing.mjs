@@ -365,6 +365,73 @@ await assert.rejects(
   /非 JSON/,
 );
 
+let malformedJsonAttempts = 0;
+global.fetch = async () => {
+  malformedJsonAttempts += 1;
+
+  if (malformedJsonAttempts === 1) {
+    return new Response(
+      JSON.stringify({
+        choices: [{ message: { content: '{"finalListing":{"bulletPoints":["missing comma" "bad"]}' } }],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
+
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(createValidResult()) } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+};
+
+const retriedMalformedJsonGeneration = await aiListingModule.generateAmazonListing({
+  projectId: "project-malformed-json-retry",
+  userId: "user-1",
+  projectData: {
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    form_data: { color: "黑色", material: "ABS" },
+  },
+});
+
+assert.equal(malformedJsonAttempts, 2);
+assert.equal(retriedMalformedJsonGeneration.ok, true);
+assert.equal(retriedMalformedJsonGeneration.source, "deepseek");
+assertCompleteListingResult(retriedMalformedJsonGeneration.result);
+
+let blockedClaimRetryAttempts = 0;
+global.fetch = async () => {
+  blockedClaimRetryAttempts += 1;
+  const result = createValidResult();
+
+  if (blockedClaimRetryAttempts === 1) {
+    result.finalListing.description.english =
+      "This suitcase copy mentions TSA lock even though that feature is not confirmed.";
+  }
+
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(result) } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+};
+
+const retriedBlockedClaimGeneration = await aiListingModule.generateAmazonListing({
+  projectId: "project-blocked-claim-retry",
+  userId: "user-1",
+  projectData: {
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    form_data: { color: "黑色", material: "ABS" },
+  },
+});
+
+assert.equal(blockedClaimRetryAttempts, 2);
+assert.equal(retriedBlockedClaimGeneration.ok, true);
+assert.equal(retriedBlockedClaimGeneration.source, "deepseek");
+assertCompleteListingResult(retriedBlockedClaimGeneration.result);
+
 global.fetch = async () => {
   const mockSourceResult = createValidResult({ source: "mock" });
 

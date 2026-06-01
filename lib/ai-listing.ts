@@ -66,6 +66,8 @@ type GenerationResponse =
     };
 
 const AI_REQUEST_TIMEOUT_MS = 55000;
+const DEEPSEEK_GENERATION_ATTEMPTS = 3;
+const DEEPSEEK_MAX_TOKENS = 2200;
 const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com/chat/completions";
 const SYSTEM_PROMPT_ID = "workup-listing-system-prompt";
 const USER_PROMPT_ID = "workup-listing-user-prompt";
@@ -276,6 +278,19 @@ export function parseDeepSeekJsonResponse(responseText: string) {
         : "DeepSeek JSON 解析失败。",
     );
   }
+}
+
+function isRetryableDeepSeekContentError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.startsWith("DeepSeek JSON 解析失败") ||
+    error.message.startsWith("DeepSeek 返回了非 JSON 文本") ||
+    error.message.startsWith("DeepSeek 没有返回可解析") ||
+    error.message.startsWith("GenerationResult validation failed:")
+  );
 }
 
 function asArray(value: unknown) {
@@ -1074,108 +1089,132 @@ export async function generateListingWithDeepSeek(
     throw new Error("DEEPSEEK_API_KEY 未配置或不可用，真实生成不能 fallback mock。");
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
-  const requestStartedAt = Date.now();
-  console.log("[generate-listing]", {
-    event: "DeepSeek request started",
-    source: "deepseek",
-    model,
-    promptVersion: prompt.promptVersion,
-  });
-  let response: Response;
-
-  try {
-    response = await fetch(baseUrl, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2200,
-        temperature: 0.4,
-        messages: [
-          {
-            role: "system",
-            content: prompt.systemPrompt,
-          },
-          {
-            role: "user",
-            content: prompt.userPrompt,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-  } catch (error) {
-    const elapsedMs = Date.now() - requestStartedAt;
-    console.log("[generate-listing]", {
-      event: "DeepSeek request finished",
-      source: "deepseek",
-      elapsedMs,
-      ok: false,
-    });
-    throw new Error(
-      error instanceof Error
-        ? `DeepSeek 请求失败：${error.message}`
-        : "DeepSeek 请求失败，请稍后再试。",
-    );
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  const elapsedMs = Date.now() - requestStartedAt;
-  console.log("[generate-listing]", {
-    event: "DeepSeek request finished",
-    source: "deepseek",
-    elapsedMs,
-    status: response.status,
-  });
-
-  const payload = (await response.json().catch(() => null)) as (DeepSeekResponse & {
-    error?: { message?: string };
-  }) | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || `DeepSeek 生成失败，状态码：${response.status}`);
-  }
-
-  const responseText = extractDeepSeekText(payload || {});
-
-  if (!responseText) {
-    throw new Error("DeepSeek 没有返回可解析的 Work UP GenerationResult。");
-  }
-
-  const rawResult = parseDeepSeekJsonResponse(responseText);
-  const normalizedResult = normalizeDeepSeekResult(
-    rawResult,
-    {
-      productBrief: input.productBrief,
-      competitorInsights: input.competitorInsights,
-      listingStrategy: input.listingStrategy,
-      model,
-    },
-    model,
-  );
   const validationContext: GenerationValidationContext = {
     productBrief: input.productBrief,
     competitorInsights: input.competitorInsights,
     listingStrategy: input.listingStrategy,
     model,
   };
-  const result = validateGenerationResult(normalizedResult, validationContext);
 
-  return {
-    ok: true,
-    source: "deepseek",
-    model,
-    result,
-    inputSnapshot,
-    promptVersion: prompt.promptVersion,
-  };
+  for (let attempt = 1; attempt <= DEEPSEEK_GENERATION_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+    const requestStartedAt = Date.now();
+    console.log("[generate-listing]", {
+      event: "DeepSeek request started",
+      source: "deepseek",
+      model,
+      promptVersion: prompt.promptVersion,
+      attempt,
+    });
+    let response: Response;
+
+    try {
+      response = await fetch(baseUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: DEEPSEEK_MAX_TOKENS,
+          temperature: 0.4,
+          messages: [
+            {
+              role: "system",
+              content: prompt.systemPrompt,
+            },
+            {
+              role: "user",
+              content: prompt.userPrompt,
+            },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+    } catch (error) {
+      const elapsedMs = Date.now() - requestStartedAt;
+      console.log("[generate-listing]", {
+        event: "DeepSeek request finished",
+        source: "deepseek",
+        elapsedMs,
+        ok: false,
+        attempt,
+      });
+      throw new Error(
+        error instanceof Error
+          ? `DeepSeek 请求失败：${error.message}`
+          : "DeepSeek 请求失败，请稍后再试。",
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const elapsedMs = Date.now() - requestStartedAt;
+    console.log("[generate-listing]", {
+      event: "DeepSeek request finished",
+      source: "deepseek",
+      elapsedMs,
+      status: response.status,
+      attempt,
+    });
+
+    const payload = (await response.json().catch(() => null)) as (DeepSeekResponse & {
+      error?: { message?: string };
+    }) | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || `DeepSeek 生成失败，状态码：${response.status}`);
+    }
+
+    try {
+      const responseText = extractDeepSeekText(payload || {});
+
+      if (!responseText) {
+        throw new Error("DeepSeek 没有返回可解析的 Work UP GenerationResult。");
+      }
+
+      const rawResult = parseDeepSeekJsonResponse(responseText);
+      const normalizedResult = normalizeDeepSeekResult(
+        rawResult,
+        {
+          productBrief: input.productBrief,
+          competitorInsights: input.competitorInsights,
+          listingStrategy: input.listingStrategy,
+          model,
+        },
+        model,
+      );
+      const result = validateGenerationResult(normalizedResult, validationContext);
+
+      return {
+        ok: true,
+        source: "deepseek",
+        model,
+        result,
+        inputSnapshot,
+        promptVersion: prompt.promptVersion,
+      };
+    } catch (error) {
+      if (attempt < DEEPSEEK_GENERATION_ATTEMPTS && isRetryableDeepSeekContentError(error)) {
+        console.warn("[generate-listing]", {
+          event: "DeepSeek response retry",
+          source: "deepseek",
+          model,
+          promptVersion: prompt.promptVersion,
+          attempt,
+          reason: error instanceof Error ? error.message : "unknown",
+        });
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error("DeepSeek 生成失败，请稍后再试。");
 }
 
 export async function generateAmazonListing(input: GenerateListingInput) {

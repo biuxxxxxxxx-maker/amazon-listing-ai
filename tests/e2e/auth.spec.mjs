@@ -21,6 +21,8 @@ test.describe("auth flow", () => {
     await page.goto("/login");
     await expect(page.getByText("正在恢复登录状态...")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "登录 / 注册" })).toBeVisible();
+    await expect(page.getByText("DeepSeek 生成会在第三阶段启用。")).toHaveCount(0);
+    await expect(page.getByText("登录后可以保存 Draft，并在结果页调用 DeepSeek 生成正式 Listing。")).toBeVisible();
     await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
     await expect(page.getByPlaceholder("输入密码，至少 6 位")).toBeVisible();
     await expect(page.getByLabel("保持登录状态")).toBeChecked();
