@@ -282,8 +282,230 @@ function asArray(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function cleanText(value: unknown) {
+  const normalized = textValue(value);
+  const lower = normalized.toLowerCase();
+
+  return lower === "undefined" || lower === "null" || lower === "nan" ? "" : normalized;
+}
+
+function textFromRecord(
+  record: Record<string, unknown>,
+  keys: string[],
+  fallback = "",
+) {
+  for (const key of keys) {
+    const value = cleanText(record[key]);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function hasConfirmedFact(context: GenerationValidationContext, field: string) {
+  return context.productBrief.confirmedFacts.some(
+    (fact) => fact.field.toLowerCase() === field.toLowerCase() && cleanText(fact.value),
+  );
+}
+
+function uniqueByText<T>(items: T[], getKey: (item: T) => string) {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    const key = getKey(item).toLowerCase();
+
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(item);
+  }
+
+  return result;
+}
+
+function validImpactArea(value: string): GenerationResult["missingInfo"][number]["impactArea"] {
+  const normalized = value as GenerationResult["missingInfo"][number]["impactArea"];
+  const values = new Set<GenerationResult["missingInfo"][number]["impactArea"]>([
+    "title",
+    "bulletPoints",
+    "description",
+    "searchTerms",
+    "images",
+    "compliance",
+    "positioning",
+    "conversion",
+  ]);
+
+  return values.has(normalized) ? normalized : "bulletPoints";
+}
+
+function validConfidence(
+  value: string,
+): GenerationResult["assumptions"][number]["confidence"] {
+  return value === "low" || value === "medium" || value === "high" ? value : "medium";
+}
+
+function validRiskLevel(
+  value: string,
+): GenerationResult["complianceNotes"][number]["riskLevel"] {
+  return value === "low" || value === "medium" || value === "high" ? value : "medium";
+}
+
+function validPriority(
+  value: string,
+): GenerationResult["improvementSuggestions"][number]["priority"] {
+  return value === "low" || value === "medium" || value === "high" ? value : "medium";
+}
+
+function validSourceBasis(
+  value: string,
+): GenerationResult["finalListing"]["bulletPoints"][number]["sourceBasis"] {
+  return value === "confirmed_fact" ||
+    value === "safe_inference" ||
+    value === "competitor_inspired"
+    ? value
+    : "safe_inference";
+}
+
+function languageField(
+  value: unknown,
+  fallbackEnglish: string,
+  fallbackChineseExplanation: string,
+) {
+  const record = asRecord(value);
+
+  return {
+    english: textFromRecord(record, ["english", "en", "text"], fallbackEnglish),
+    chineseExplanation: textFromRecord(
+      record,
+      ["chineseExplanation", "chinese", "zh", "explanation"],
+      fallbackChineseExplanation,
+    ),
+  };
+}
+
+function buildFallbackFinalListing(
+  context: GenerationValidationContext,
+): GenerationResult["finalListing"] {
+  const product = context.productBrief.product;
+  const primaryKeyword = context.listingStrategy.primaryKeyword || product.category;
+  const secondaryKeywords = context.listingStrategy.secondaryKeywords.filter(Boolean);
+  const safeClaims = context.listingStrategy.safeClaims.map((item) => item.claim).filter(Boolean);
+  const confirmedFactFields = context.productBrief.confirmedFacts
+    .map((item) => item.field)
+    .filter(Boolean);
+  const confirmedFactSummary =
+    safeClaims.slice(0, 3).join(", ") || `${product.category} identity`;
+
+  return {
+    title: {
+      english: `${primaryKeyword} for Practical Amazon Listing Use`,
+      chineseExplanation: "标题基于主关键词、产品类目和已确认事实，避免未确认规格。",
+    },
+    bulletPoints: [
+      {
+        english: `Built around confirmed product facts including ${confirmedFactSummary}.`,
+        chineseExplanation: "优先使用用户已确认的产品事实。",
+        sourceBasis: "confirmed_fact",
+        evidenceFields: confirmedFactFields.slice(0, 4),
+      },
+      {
+        english: `Clear ${product.category} positioning helps shoppers understand the main use case quickly.`,
+        chineseExplanation: "用类目和使用场景做保守定位，不编造额外功能。",
+        sourceBasis: "safe_inference",
+        evidenceFields: ["productBrief.product.category", "listingStrategy.positioning"],
+      },
+      {
+        english: "Practical wording keeps the listing useful while leaving exact specifications to be confirmed.",
+        chineseExplanation: "对尺寸、容量、重量等未确认信息保持谨慎。",
+        sourceBasis: "safe_inference",
+        evidenceFields: ["productBrief.missingInfo"],
+      },
+      {
+        english: "Competitor insights guide keyword direction without copying unverified competitor claims.",
+        chineseExplanation: "竞品只用于关键词和机会判断，不直接复制 claim。",
+        sourceBasis: "competitor_inspired",
+        evidenceFields: ["competitorInsights.keywordPatterns", "competitorInsights.opportunities"],
+      },
+      {
+        english: "Compliance-safe copy avoids unsupported promises, guarantees, certifications, or brand terms.",
+        chineseExplanation: "明确避开高风险 claim 和竞品品牌词。",
+        sourceBasis: "safe_inference",
+        evidenceFields: ["listingStrategy.avoidClaims"],
+      },
+    ],
+    description: {
+      english: `This ${primaryKeyword} listing is written from confirmed product context and conservative Work UP strategy. It focuses on clear buyer understanding, safe keywords, and practical positioning while keeping unconfirmed specifications out of the final copy.`,
+      chineseExplanation: "描述由服务端补齐，强调已确认事实、保守策略和未确认信息边界。",
+    },
+    searchTerms: {
+      english: uniqueByText([primaryKeyword, ...secondaryKeywords], (item) => item)
+        .slice(0, 8)
+        .join(" "),
+      chineseExplanation: "搜索词由安全关键词组成，不加入品牌词或未确认高风险 claim。",
+    },
+  };
+}
+
+function normalizeBulletPoint(
+  value: unknown,
+  fallback: GenerationResult["finalListing"]["bulletPoints"][number],
+) {
+  const record = asRecord(value);
+  const evidenceFields = asArray(record.evidenceFields)
+    .map((item) => cleanText(item))
+    .filter(Boolean);
+
+  return {
+    ...languageField(value, fallback.english, fallback.chineseExplanation),
+    sourceBasis: validSourceBasis(cleanText(record.sourceBasis) || fallback.sourceBasis),
+    evidenceFields: evidenceFields.length > 0 ? evidenceFields : fallback.evidenceFields,
+  };
+}
+
+function normalizeFinalListing(
+  rawFinalListing: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["finalListing"] {
+  const fallback = buildFallbackFinalListing(context);
+  const listing = asRecord(rawFinalListing);
+  const rawBullets = asArray(listing.bulletPoints);
+  const normalizedBullets = rawBullets
+    .slice(0, 5)
+    .map((item, index) => normalizeBulletPoint(item, fallback.bulletPoints[index]));
+
+  while (normalizedBullets.length < 5) {
+    normalizedBullets.push(fallback.bulletPoints[normalizedBullets.length]);
+  }
+
+  return {
+    title: languageField(
+      listing.title,
+      fallback.title.english,
+      fallback.title.chineseExplanation,
+    ),
+    bulletPoints: normalizedBullets as GenerationResult["finalListing"]["bulletPoints"],
+    description: languageField(
+      listing.description,
+      fallback.description.english,
+      fallback.description.chineseExplanation,
+    ),
+    searchTerms: languageField(
+      listing.searchTerms,
+      fallback.searchTerms.english,
+      fallback.searchTerms.chineseExplanation,
+    ),
+  };
 }
 
 function buildFallbackQualityScore(context: GenerationValidationContext) {
@@ -356,6 +578,302 @@ function buildFallbackAnalysis(context: GenerationValidationContext) {
   };
 }
 
+function defaultMissingInfo(context: GenerationValidationContext) {
+  const additionalMissing = [
+    {
+      field: "brand",
+      whyItMatters: "品牌会影响标题、品牌归属、图片和 Amazon 后台基础信息。",
+      example: "Work UP Travel, seller private-label brand, or registered brand name",
+      impactArea: "title",
+    },
+    {
+      field: "dimensions",
+      whyItMatters: "尺寸影响标题、五点、图片说明和买家是否能确认适配场景。",
+      example: "20 x 14 x 9 inches",
+      impactArea: "title",
+    },
+    {
+      field: "weight",
+      whyItMatters: "重量影响便携性表达、配送预期和买家决策。",
+      example: "2.8 lb, 1.3 kg",
+      impactArea: "bulletPoints",
+    },
+    {
+      field: "capacity",
+      whyItMatters: "容量缺失时，不能安全写 large capacity、heavy-duty 等强 claim。",
+      example: "35 L, fits 3 days of clothes",
+      impactArea: "compliance",
+    },
+  ] satisfies GenerationResult["missingInfo"];
+  const filteredAdditionalMissing = additionalMissing.filter(
+    (item) => !hasConfirmedFact(context, item.field),
+  );
+
+  return uniqueByText(
+    [...context.productBrief.missingInfo, ...filteredAdditionalMissing],
+    (item) => item.field,
+  );
+}
+
+function normalizeMissingInfo(
+  rawMissingInfo: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["missingInfo"] {
+  const normalized = asArray(rawMissingInfo)
+    .map((item): GenerationResult["missingInfo"][number] | null => {
+      if (typeof item === "string") {
+        const field = cleanText(item);
+
+        return field
+          ? {
+              field,
+              whyItMatters: "这个信息会影响 Listing 的具体度、可信度或合规边界。",
+              example: "Add a concrete value from product specs or supplier data.",
+              impactArea: "bulletPoints",
+            }
+          : null;
+      }
+
+      const record = asRecord(item);
+      const field = textFromRecord(record, ["field", "name", "missingField", "title"]);
+
+      if (!field) {
+        return null;
+      }
+
+      return {
+        field,
+        whyItMatters: textFromRecord(
+          record,
+          ["whyItMatters", "reason", "importance"],
+          "这个信息会影响 Listing 的具体度、可信度或合规边界。",
+        ),
+        example: textFromRecord(
+          record,
+          ["example", "sample", "expectedValue"],
+          "Add a concrete value from product specs or supplier data.",
+        ),
+        impactArea: validImpactArea(textFromRecord(record, ["impactArea", "area"])),
+      };
+    })
+    .filter((item): item is GenerationResult["missingInfo"][number] => Boolean(item));
+
+  return normalized.length > 0 ? normalized : defaultMissingInfo(context);
+}
+
+function defaultAssumptions(context: GenerationValidationContext) {
+  const product = context.productBrief.product;
+  const assumptions: GenerationResult["assumptions"] = [
+    {
+      assumption: `${product.category} is positioned for practical buyer use.`,
+      reason: "The provided category is the strongest confirmed business context.",
+      confidence: "medium",
+      shouldVerifyWithUser: true,
+    },
+    {
+      assumption: "Unconfirmed specifications should stay out of the final listing copy.",
+      reason: "Missing size, capacity, warranty, certification, or feature proof creates claim risk.",
+      confidence: "high",
+      shouldVerifyWithUser: true,
+    },
+  ];
+
+  if (context.listingStrategy.safeClaims.length > 0) {
+    assumptions.push({
+      assumption: "Confirmed safe claims can be used as the primary selling-point base.",
+      reason: context.listingStrategy.safeClaims
+        .map((item) => item.claim)
+        .slice(0, 3)
+        .join(", "),
+      confidence: "high",
+      shouldVerifyWithUser: false,
+    });
+  }
+
+  return assumptions;
+}
+
+function normalizeAssumptions(
+  rawAssumptions: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["assumptions"] {
+  const normalized = asArray(rawAssumptions)
+    .map((item): GenerationResult["assumptions"][number] | null => {
+      const record = asRecord(item);
+      const assumption = textFromRecord(record, ["assumption", "title", "name", "text"]);
+
+      if (!assumption) {
+        return null;
+      }
+
+      return {
+        assumption,
+        reason: textFromRecord(
+          record,
+          ["reason", "why", "basis"],
+          "Based on the current product information and conservative Work UP strategy.",
+        ),
+        confidence: validConfidence(textFromRecord(record, ["confidence"])),
+        shouldVerifyWithUser:
+          typeof record.shouldVerifyWithUser === "boolean"
+            ? record.shouldVerifyWithUser
+            : true,
+      };
+    })
+    .filter((item): item is GenerationResult["assumptions"][number] => Boolean(item));
+
+  return normalized.length > 0 ? normalized : defaultAssumptions(context);
+}
+
+function defaultComplianceNotes(context: GenerationValidationContext) {
+  const notes: GenerationResult["complianceNotes"] = [
+    ...context.productBrief.prohibitedClaims.map((item) => ({
+      riskLevel: "high" as const,
+      claim: item.claim,
+      reason: item.reason,
+      recommendation: "Do not use this claim until proof is available.",
+      relatedField: item.source,
+    })),
+    ...context.competitorInsights.riskyClaims.map((item) => ({
+      riskLevel: "medium" as const,
+      claim: item.claim,
+      reason: item.reason,
+      recommendation: "Keep this as an opportunity only until your own product proof confirms it.",
+      relatedField: "competitorInsights.riskyClaims",
+    })),
+    ...context.competitorInsights.blockedFromFinalListing.map((item) => ({
+      riskLevel: item.reason === "brand_term" ? "high" as const : "medium" as const,
+      claim: item.claim,
+      reason:
+        item.reason === "brand_term"
+          ? "Competitor brand terms must not enter Search Terms or final copy."
+          : "Competitor claim is unconfirmed for this product.",
+      recommendation: "Confirm with your own product specs before using this wording.",
+      relatedField: `competitorInsights.blockedFromFinalListing.${item.reason}`,
+    })),
+  ];
+
+  return uniqueByText(notes, (item) => `${item.claim}-${item.reason}`);
+}
+
+function normalizeComplianceNotes(
+  rawComplianceNotes: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["complianceNotes"] {
+  const normalized = asArray(rawComplianceNotes)
+    .map((item): GenerationResult["complianceNotes"][number] | null => {
+      const record = asRecord(item);
+      const claim = textFromRecord(record, ["claim", "risk", "issue", "title"]);
+
+      if (!claim) {
+        return null;
+      }
+
+      return {
+        riskLevel: validRiskLevel(textFromRecord(record, ["riskLevel", "level"])),
+        claim,
+        reason: textFromRecord(
+          record,
+          ["reason", "why", "description"],
+          "This claim needs confirmation before entering final listing copy.",
+        ),
+        recommendation: textFromRecord(
+          record,
+          ["recommendation", "suggestion", "action"],
+          "Verify product proof before using this claim.",
+        ),
+        relatedField: textFromRecord(record, ["relatedField", "field", "source"]),
+      };
+    })
+    .filter((item): item is GenerationResult["complianceNotes"][number] => Boolean(item));
+
+  return normalized.length > 0 ? normalized : defaultComplianceNotes(context);
+}
+
+function defaultImprovementSuggestions(
+  context: GenerationValidationContext,
+): GenerationResult["improvementSuggestions"] {
+  const missingFields = defaultMissingInfo(context)
+    .map((item) => item.field)
+    .slice(0, 4)
+    .join(", ");
+
+  return [
+    {
+      priority: "high",
+      suggestion: `补充关键规格：${missingFields || "dimensions, weight, capacity, brand"}.`,
+      reason: "这些字段会直接影响标题、五点、图片说明和买家判断。",
+      expectedImpact: "bulletPoints",
+    },
+    {
+      priority: "high",
+      suggestion: "确认所有可能涉及功能、认证、保修或强性能的 claim。",
+      reason: "未确认 claim 不能进入最终 Listing，否则容易产生合规风险。",
+      expectedImpact: "compliance",
+    },
+    {
+      priority: "medium",
+      suggestion: "补充真实使用场景、目标买家和差异化证据。",
+      reason: "更具体的场景和差异化会让文案更接近真实运营表达。",
+      expectedImpact: "conversion",
+    },
+  ];
+}
+
+function normalizeImprovementSuggestions(
+  rawSuggestions: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["improvementSuggestions"] {
+  const normalized = asArray(rawSuggestions)
+    .map((item): GenerationResult["improvementSuggestions"][number] | null => {
+      const record = asRecord(item);
+      const suggestion = textFromRecord(record, ["suggestion", "title", "action", "text"]);
+
+      if (!suggestion) {
+        return null;
+      }
+
+      return {
+        priority: validPriority(textFromRecord(record, ["priority"])),
+        suggestion,
+        reason: textFromRecord(
+          record,
+          ["reason", "why", "basis"],
+          "This improves listing specificity and buyer trust.",
+        ),
+        expectedImpact: validImpactArea(textFromRecord(record, ["expectedImpact", "impactArea"])),
+      };
+    })
+    .filter((item): item is GenerationResult["improvementSuggestions"][number] =>
+      Boolean(item),
+    );
+
+  return uniqueByText(
+    [...normalized, ...defaultImprovementSuggestions(context)],
+    (item) => item.suggestion,
+  ).slice(0, Math.max(3, normalized.length));
+}
+
+function normalizeAnalysis(
+  rawAnalysis: unknown,
+  context: GenerationValidationContext,
+): GenerationResult["analysis"] {
+  const record = asRecord(rawAnalysis);
+  const fallback = buildFallbackAnalysis(context);
+
+  return {
+    productSummary: textFromRecord(record, ["productSummary"], fallback.productSummary),
+    strategySummary: textFromRecord(record, ["strategySummary"], fallback.strategySummary),
+    competitorSummary: textFromRecord(record, ["competitorSummary"], fallback.competitorSummary),
+    complianceSummary: textFromRecord(record, ["complianceSummary"], fallback.complianceSummary),
+    beginnerExplanation: textFromRecord(
+      record,
+      ["beginnerExplanation"],
+      fallback.beginnerExplanation,
+    ),
+  };
+}
+
 function normalizeDeepSeekResult(
   rawResult: unknown,
   context: GenerationValidationContext,
@@ -372,14 +890,15 @@ function normalizeDeepSeekResult(
     productBrief: context.productBrief,
     competitorInsights: context.competitorInsights,
     listingStrategy: context.listingStrategy,
-    finalListing: result.finalListing as GenerationResult["finalListing"],
-    complianceNotes: asArray(result.complianceNotes) as GenerationResult["complianceNotes"],
-    missingInfo: (asArray(result.missingInfo).length > 0
-      ? asArray(result.missingInfo)
-      : context.productBrief.missingInfo) as GenerationResult["missingInfo"],
-    assumptions: asArray(result.assumptions) as GenerationResult["assumptions"],
-    improvementSuggestions: asArray(result.improvementSuggestions) as GenerationResult["improvementSuggestions"],
-    analysis: (isRecord(result.analysis) ? result.analysis : buildFallbackAnalysis(context)) as GenerationResult["analysis"],
+    finalListing: normalizeFinalListing(result.finalListing, context),
+    complianceNotes: normalizeComplianceNotes(result.complianceNotes, context),
+    missingInfo: normalizeMissingInfo(result.missingInfo, context),
+    assumptions: normalizeAssumptions(result.assumptions, context),
+    improvementSuggestions: normalizeImprovementSuggestions(
+      result.improvementSuggestions,
+      context,
+    ),
+    analysis: normalizeAnalysis(result.analysis, context),
   };
 }
 

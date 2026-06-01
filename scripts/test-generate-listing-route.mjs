@@ -115,6 +115,103 @@ const inputSnapshot = {
   createdAt: "2026-05-26T00:00:00.000Z",
 };
 
+function createCompleteGenerationResult() {
+  return {
+    schemaVersion: "workup.v1",
+    source: "deepseek",
+    generatedAt: "2026-05-26T00:00:00.000Z",
+    model: "deepseek-chat",
+    qualityScore: {
+      overall: 76,
+      level: "good",
+      dimensions: {
+        inputCompleteness: 68,
+        keywordRelevance: 78,
+        complianceSafety: 90,
+        amazonReadiness: 76,
+        copyClarity: 80,
+      },
+      summary: "资料足够生成保守、兼容的 Amazon Listing。",
+    },
+    productBrief,
+    competitorInsights,
+    listingStrategy,
+    finalListing: {
+      title: { english: "Black ABS Suitcase for Practical Travel Use", chineseExplanation: "标题解释" },
+      bulletPoints: [1, 2, 3, 4, 5].map((rank) => ({
+        english: `Conservative suitcase bullet ${rank} based on confirmed product input.`,
+        chineseExplanation: `第 ${rank} 条五点解释。`,
+        sourceBasis: rank === 1 ? "confirmed_fact" : "safe_inference",
+        evidenceFields: ["confirmedFacts"],
+      })),
+      description: { english: "Description", chineseExplanation: "描述" },
+      searchTerms: { english: "black suitcase abs luggage", chineseExplanation: "关键词解释" },
+    },
+    complianceNotes: [
+      {
+        riskLevel: "medium",
+        claim: "TSA lock",
+        reason: "This claim is unconfirmed.",
+        recommendation: "Verify before using it.",
+      },
+    ],
+    missingInfo: [
+      {
+        field: "dimensions",
+        whyItMatters: "Dimensions affect title, bullets, and buyer fit decisions.",
+        example: "20 x 14 x 9 inches",
+        impactArea: "title",
+      },
+    ],
+    assumptions: [
+      {
+        assumption: "The product is for general travel use.",
+        reason: "The category is Travel & Luggage.",
+        confidence: "medium",
+        shouldVerifyWithUser: true,
+      },
+    ],
+    improvementSuggestions: [
+      {
+        priority: "high",
+        suggestion: "Add dimensions, weight, capacity, and brand.",
+        reason: "These fields improve specificity and compliance boundaries.",
+        expectedImpact: "bulletPoints",
+      },
+      {
+        priority: "high",
+        suggestion: "Confirm all lock, wheel, certification, or warranty claims.",
+        reason: "Unverified claims should not enter final copy.",
+        expectedImpact: "compliance",
+      },
+      {
+        priority: "medium",
+        suggestion: "Add real use cases and buyer profile details.",
+        reason: "This makes the listing more conversion focused.",
+        expectedImpact: "conversion",
+      },
+    ],
+    analysis: {
+      productSummary: "行李箱，黑色，ABS。",
+      strategySummary: "使用保守关键词和已确认事实。",
+      competitorSummary: "竞品只用于策略参考。",
+      complianceSummary: "避免未确认 claim。",
+      beginnerExplanation: "资料越完整，结果越接近真实运营表达。",
+    },
+  };
+}
+
+function assertRouteResultShape(result) {
+  assert.equal(result.source, "deepseek");
+  assert.equal(typeof result.qualityScore.summary, "string");
+  assert.equal(result.finalListing.bulletPoints.length, 5);
+  assert.ok(Array.isArray(result.missingInfo));
+  assert.ok(Array.isArray(result.assumptions));
+  assert.ok(Array.isArray(result.complianceNotes));
+  assert.ok(Array.isArray(result.improvementSuggestions));
+  assert.doesNotMatch(JSON.stringify(result), /\b(undefined|null|nan)\b/i);
+}
+
 const require = (specifier) => {
   if (specifier === "next/server") {
     return {
@@ -168,17 +265,7 @@ const require = (specifier) => {
           ok: true,
           source: "deepseek",
           model: "deepseek-chat",
-          result: {
-            schemaVersion: "workup.v1",
-            source: "deepseek",
-            model: "deepseek-chat",
-            finalListing: {
-              title: { english: "Black ABS Suitcase", chineseExplanation: "标题解释" },
-              bulletPoints: [],
-              description: { english: "Description", chineseExplanation: "描述" },
-              searchTerms: { english: "black suitcase", chineseExplanation: "关键词解释" },
-            },
-          },
+          result: createCompleteGenerationResult(),
           inputSnapshot: input.inputSnapshot,
           promptVersion: "workup-listing-v1",
         };
@@ -298,6 +385,7 @@ assert.equal(response.status, 200);
 assert.equal(body.ok, true);
 assert.equal(body.source, "deepseek");
 assert.equal(body.result.source, "deepseek");
+assertRouteResultShape(body.result);
 assert.equal(body.inputSnapshot.productBrief.product.nameCn, "行李箱");
 assert.equal(body.inputSnapshot.productBrief.product.category, "Travel & Luggage");
 assert.equal(body.inputSnapshot.projectSnapshot.formData.color, "黑色");
@@ -331,6 +419,7 @@ const authedBody = await authedResponse.json();
 assert.equal(authedResponse.status, 200);
 assert.equal(authedBody.ok, true);
 assert.equal(authedBody.source, "deepseek");
+assertRouteResultShape(authedBody.result);
 assert.equal(getServerSupabaseCallCount, 1);
 assert.equal(getUserCallCount, 1);
 assert.equal(projectReadCallCount, 1);

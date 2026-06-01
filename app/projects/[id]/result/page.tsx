@@ -35,13 +35,13 @@ const emptyResultMessage = "尚未生成 Listing，请点击重新生成。";
 const loadingMessage = "正在基于产品资料、竞品洞察和 Listing 策略生成...";
 
 const resultNavItems = [
-  ["Final Listing", "final-listing"],
-  ["Quality", "quality-strategy"],
-  ["Missing Info", "missing-info"],
-  ["Assumptions", "assumptions"],
-  ["Compliance", "compliance-notes"],
-  ["Competitors", "competitor-insights"],
-  ["Suggestions", "expert-analysis"],
+  ["最终 Listing", "final-listing"],
+  ["质量与策略", "quality-strategy"],
+  ["缺失信息", "missing-info"],
+  ["保守假设", "assumptions"],
+  ["合规提醒", "compliance-notes"],
+  ["竞品洞察", "competitor-insights"],
+  ["专家建议", "expert-analysis"],
 ];
 
 type ProjectData = {
@@ -67,6 +67,117 @@ function textValue(value: unknown) {
 
 function hasText(value: unknown) {
   return textValue(value).length > 0;
+}
+
+function cleanDisplayText(value: unknown, fallback = "Not provided.") {
+  let text = "";
+
+  if (typeof value === "string") {
+    text = value.trim();
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    text = String(value);
+  } else if (typeof value === "boolean") {
+    text = value ? "yes" : "no";
+  }
+
+  const normalized = text.toLowerCase();
+
+  if (
+    !text ||
+    normalized === "undefined" ||
+    normalized === "null" ||
+    normalized === "nan" ||
+    text === "-"
+  ) {
+    return fallback;
+  }
+
+  return text;
+}
+
+function hasDisplayText(value: unknown) {
+  return cleanDisplayText(value, "") !== "";
+}
+
+function getRecordValue(record: Record<string, unknown> | null | undefined, key: string) {
+  return record ? record[key] : undefined;
+}
+
+function collectGenerationPrerequisites(projectData: ProjectData | null) {
+  const formData = isRecord(projectData?.form_data) ? projectData.form_data : {};
+  const missing: string[] = [];
+
+  if (!hasText(projectData?.product_name_cn) && !hasText(getRecordValue(formData, "product_name_cn"))) {
+    missing.push("产品名称");
+  }
+
+  const marketplaceValue =
+    projectData?.marketplace || textValue(getRecordValue(formData, "marketplace"));
+
+  if (!marketplaceValue) {
+    missing.push("Amazon 站点");
+  }
+
+  if (!hasText(projectData?.category) && !hasText(getRecordValue(formData, "category"))) {
+    missing.push("类目");
+  }
+
+  const factFields = [
+    "material",
+    "color",
+    "dimensions",
+    "size",
+    "weight",
+    "capacity",
+    "package_quantity",
+    "use_cases",
+    "usage_scenarios",
+    "core_features",
+    "supplier_description",
+    "competitor_title",
+    "competitor_selling_points",
+    "review_pain_points",
+    "differentiation",
+  ];
+
+  const hasProductFact = factFields.some((field) => hasText(getRecordValue(formData, field)));
+
+  if (!hasProductFact) {
+    missing.push("产品基础资料");
+  }
+
+  const hasGenerationSettings =
+    hasText(getRecordValue(formData, "english_style")) &&
+    hasText(getRecordValue(formData, "language"));
+
+  if (!hasGenerationSettings) {
+    missing.push("生成设置");
+  }
+
+  return missing;
+}
+
+function compactTextItems(items: unknown[]) {
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const item of items) {
+    const text = cleanDisplayText(item, "");
+    const key = text.toLowerCase();
+
+    if (!text || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    cleaned.push(text);
+  }
+
+  return cleaned;
+}
+
+function joinDisplayParts(parts: unknown[], separator = ": ") {
+  return compactTextItems(parts).join(separator);
 }
 
 function isCompleteWorkUpGenerationResult(value: unknown): value is GenerationResult {
@@ -331,10 +442,18 @@ export default function ResultPage() {
   }
 
   async function regenerateListing() {
+    const missingPrerequisites = collectGenerationPrerequisites(projectData);
+
+    if (missingPrerequisites.length > 0) {
+      setStatusMessage(`生成前缺少必填信息：${missingPrerequisites.join("、")}。请补齐后再重新生成。`);
+      setResultState(displayResult ? "ready" : "empty");
+      return;
+    }
+
     setIsGenerating(true);
     setStatusMessage(loadingMessage);
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 70000);
 
     try {
       const headers: Record<string, string> = {
@@ -396,12 +515,12 @@ export default function ResultPage() {
       setResultState("ready");
 
       if (projectId !== "demo") {
-        setStatusMessage("DeepSeek generated，正在后台保存到 Supabase。");
+        setStatusMessage("DeepSeek 已生成，正在后台保存到 Supabase。");
         void saveGeneratedResult(nextResult, nextModel, nextSnapshot, {
           clearStatus: false,
         });
       } else {
-        setStatusMessage("DeepSeek generated。当前是 demo 项目，所以没有写入数据库。");
+        setStatusMessage("DeepSeek 已生成。当前是 demo 项目，所以没有写入数据库。");
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -447,8 +566,8 @@ export default function ResultPage() {
 
         <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
           <PageHeader
-            title="Work UP Listing Result"
-            description="先交付可复制的 Amazon 英文 Listing，再解释资料质量、策略、缺失信息、假设、竞品洞察和合规风险。"
+            title="Work UP Listing 结果"
+            description="先展示可复制到 Amazon 后台的英文 Listing，再解释资料质量、卖点策略、缺失信息、保守假设、竞品洞察和合规风险。"
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:w-[31rem]">
             <CopyButton
@@ -498,7 +617,11 @@ export default function ResultPage() {
         ) : null}
 
         {!isGenerating && !hasValidResult ? (
-          <EmptyResultState state={resultState} />
+          <EmptyResultState
+            state={resultState}
+            isGenerating={isGenerating}
+            onRegenerate={regenerateListing}
+          />
         ) : null}
 
         {!isGenerating && hasValidResult && displayResult ? (
@@ -521,7 +644,7 @@ export default function ResultPage() {
               <aside className="hidden lg:block">
                 <Card className="sticky top-6 p-3">
                   <p className="px-2 pb-3 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400">
-                    Result Modules
+                    结果模块
                   </p>
                   <div className="grid gap-1">
                     {resultNavItems.map(([label, id]) => (
@@ -535,7 +658,7 @@ export default function ResultPage() {
                     ))}
                   </div>
                   <div className="mt-3 rounded-lg bg-amberSoft p-3 text-xs leading-5 text-[#8a5a1e]">
-                    Copy 只读取 Final Amazon Listing 的英文，不复制中文解释、策略或分析。
+                    复制时只读取 Final Amazon Listing 的英文，不复制中文解释、策略或分析。
                   </div>
                 </Card>
               </aside>
@@ -593,15 +716,15 @@ function SummaryCard({
     <Card className="mt-8 overflow-hidden">
       <div className="grid gap-0 lg:grid-cols-[1fr_0.55fr]">
         <div className="p-5 sm:p-6">
-          <Badge tone="green">DeepSeek generated</Badge>
+          <Badge tone="green">DeepSeek 已生成</Badge>
           <h2 className="mt-4 text-2xl font-semibold text-ink">{productName}</h2>
           <p className="mt-2 text-sm leading-6 text-neutral-600">
-            Work UP 新版 GenerationResult / {category} / Final Listing 优先
+            Work UP 新版生成结果 / {category} / Final Listing 优先展示
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-4">
             {[
               [result.qualityScore.level, "Quality Level"],
-              [String(result.qualityScore.overall), "Overall Score"],
+              [String(result.qualityScore.overall), "综合评分"],
               [String(result.finalListing.bulletPoints.length), "Bullet Points"],
               [result.model, "Model"],
             ].map(([value, label]) => (
@@ -615,7 +738,7 @@ function SummaryCard({
         <div className="border-t border-line bg-paper p-5 sm:p-6 lg:border-l lg:border-t-0">
           <div className="flex items-center gap-2">
             <ShieldAlert className="size-4 text-gold" />
-            <p className="text-sm font-semibold text-ink">Result Guardrails</p>
+            <p className="text-sm font-semibold text-ink">结果保护规则</p>
           </div>
           <div className="mt-4 space-y-3">
             {[
@@ -680,6 +803,7 @@ function FinalAmazonListing({
             {result.finalListing.bulletPoints.map((bullet, index) => (
               <article
                 key={`${bullet.english}-${index}`}
+                data-testid="final-listing-bullet"
                 className="border-b border-line px-4 py-5 last:border-b-0 sm:px-5"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -703,7 +827,7 @@ function FinalAmazonListing({
                 <ChineseExplanation>{bullet.chineseExplanation}</ChineseExplanation>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <MetaLine label="Source Basis" value={bullet.sourceBasis} />
-                  <MetaLine label="Evidence Fields" value={bullet.evidenceFields.join(", ") || "-"} />
+                  <MetaLine label="Evidence Fields" value={compactTextItems(bullet.evidenceFields).join(", ")} />
                 </div>
               </article>
             ))}
@@ -772,6 +896,8 @@ function ListingQualityAndStrategy({ result }: { result: GenerationResult }) {
 }
 
 function MissingInfoSection({ result }: { result: GenerationResult }) {
+  const items = result.missingInfo.filter((item) => hasDisplayText(item.field));
+
   return (
     <ResultBlock
       id="missing-info"
@@ -779,9 +905,9 @@ function MissingInfoSection({ result }: { result: GenerationResult }) {
       eyebrow="Input Quality"
       description="这些缺失信息会影响 Listing 精度、合规边界或转化表达。"
     >
-      {result.missingInfo.length > 0 ? (
+      {items.length > 0 ? (
         <div className="grid gap-3">
-          {result.missingInfo.map((item) => (
+          {items.map((item) => (
             <StructuredItem
               key={`${item.field}-${item.impactArea}`}
               title={item.field}
@@ -794,13 +920,15 @@ function MissingInfoSection({ result }: { result: GenerationResult }) {
           ))}
         </div>
       ) : (
-        <EmptySection text="本次没有明显缺失信息。" />
+        <EmptySection text="No critical missing information detected." />
       )}
     </ResultBlock>
   );
 }
 
 function AssumptionsSection({ result }: { result: GenerationResult }) {
+  const items = result.assumptions.filter((item) => hasDisplayText(item.assumption));
+
   return (
     <ResultBlock
       id="assumptions"
@@ -808,9 +936,9 @@ function AssumptionsSection({ result }: { result: GenerationResult }) {
       eyebrow="Conservative Inference"
       description="低信息输入时，系统做出的保守假设会在这里明示。"
     >
-      {result.assumptions.length > 0 ? (
+      {items.length > 0 ? (
         <div className="grid gap-3">
-          {result.assumptions.map((item) => (
+          {items.map((item) => (
             <StructuredItem
               key={item.assumption}
               title={item.assumption}
@@ -823,13 +951,15 @@ function AssumptionsSection({ result }: { result: GenerationResult }) {
           ))}
         </div>
       ) : (
-        <EmptySection text="本次没有额外假设。" />
+        <EmptySection text="No major assumptions were needed." />
       )}
     </ResultBlock>
   );
 }
 
 function ComplianceNotesSection({ result }: { result: GenerationResult }) {
+  const items = result.complianceNotes.filter((item) => hasDisplayText(item.claim));
+
   return (
     <ResultBlock
       id="compliance-notes"
@@ -837,22 +967,22 @@ function ComplianceNotesSection({ result }: { result: GenerationResult }) {
       eyebrow="Risk Control"
       description="展示 DeepSeek 结果中的风险 claim、原因和建议处理方式。"
     >
-      {result.complianceNotes.length > 0 ? (
+      {items.length > 0 ? (
         <div className="grid gap-3">
-          {result.complianceNotes.map((item) => (
+          {items.map((item) => (
             <StructuredItem
               key={`${item.claim}-${item.reason}`}
-              title={`${item.riskLevel}: ${item.claim}`}
+              title={joinDisplayParts([item.riskLevel, item.claim])}
               rows={[
                 ["Reason", item.reason],
                 ["Recommendation", item.recommendation],
-                ["Related Field", item.relatedField || "-"],
+                ["Related Field", item.relatedField],
               ]}
             />
           ))}
         </div>
       ) : (
-        <EmptySection text="本次没有额外合规风险提示。" />
+        <EmptySection text="No compliance risks detected from the provided input." />
       )}
     </ResultBlock>
   );
@@ -907,6 +1037,19 @@ function CompetitorInsightsSection({
 }
 
 function ExpertAnalysisSection({ result }: { result: GenerationResult }) {
+  const suggestions = result.improvementSuggestions
+    .filter((item) => hasDisplayText(item.suggestion))
+    .map((item) => {
+      const suggestion = cleanDisplayText(item.suggestion);
+      const reason = cleanDisplayText(item.reason);
+      const expectedImpact = cleanDisplayText(item.expectedImpact, "general");
+
+      return joinDisplayParts([
+        item.priority,
+        `${suggestion} - ${reason} (${expectedImpact})`,
+      ]);
+    });
+
   return (
     <ResultBlock
       id="expert-analysis"
@@ -917,10 +1060,7 @@ function ExpertAnalysisSection({ result }: { result: GenerationResult }) {
       <div className="grid gap-4">
         <InfoList
           title="Improvement Suggestions"
-          items={result.improvementSuggestions.map(
-            (item) =>
-              `${item.priority}: ${item.suggestion} — ${item.reason} (${item.expectedImpact})`,
-          )}
+          items={suggestions}
         />
         <StructuredItem
           title="Analysis"
@@ -971,14 +1111,20 @@ function StructuredItem({
   title,
   rows,
 }: {
-  title: string;
-  rows: Array<[string, string]>;
+  title: unknown;
+  rows: Array<[string, unknown]>;
 }) {
+  const displayRows = rows
+    .map(([label, value]) => [label, cleanDisplayText(value, "")] as const)
+    .filter(([, value]) => value);
+  const rowsToRender =
+    displayRows.length > 0 ? displayRows : ([["Details", "Not provided."]] as const);
+
   return (
     <article className="rounded-lg border border-line bg-white p-4">
-      <p className="text-sm font-semibold text-ink">{title}</p>
+      <p className="text-sm font-semibold text-ink">{cleanDisplayText(title)}</p>
       <div className="mt-3 grid gap-2">
-        {rows.map(([label, value]) => (
+        {rowsToRender.map(([label, value]) => (
           <MetaLine key={label} label={label} value={value} />
         ))}
       </div>
@@ -986,24 +1132,36 @@ function StructuredItem({
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function InfoCard({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-lg border border-line bg-white p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
         {label}
       </p>
-      <p className="mt-2 text-sm font-semibold leading-6 text-ink">{value || "-"}</p>
+      <p className="mt-2 text-sm font-semibold leading-6 text-ink">
+        {cleanDisplayText(value)}
+      </p>
     </div>
   );
 }
 
-function InfoList({ title, items }: { title: string; items: string[] }) {
+function InfoList({
+  title,
+  items,
+  emptyText = "No usable data provided.",
+}: {
+  title: string;
+  items: unknown[];
+  emptyText?: string;
+}) {
+  const displayItems = compactTextItems(items);
+
   return (
     <div className="rounded-lg border border-line bg-white p-4">
       <p className="text-sm font-semibold text-ink">{title}</p>
-      {items.length > 0 ? (
+      {displayItems.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          {items.map((item) => (
+          {displayItems.map((item) => (
             <span
               key={item}
               className="rounded-full border border-line bg-paper px-3 py-1.5 text-sm leading-5 text-neutral-700"
@@ -1013,7 +1171,7 @@ function InfoList({ title, items }: { title: string; items: string[] }) {
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-sm leading-6 text-neutral-500">暂无数据。</p>
+        <p className="mt-2 text-sm leading-6 text-neutral-500">{emptyText}</p>
       )}
     </div>
   );
@@ -1034,18 +1192,33 @@ function RankedList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function EmptyResultState({ state }: { state: ResultState }) {
+function EmptyResultState({
+  state,
+  isGenerating,
+  onRegenerate,
+}: {
+  state: ResultState;
+  isGenerating: boolean;
+  onRegenerate: () => void;
+}) {
   const message = state === "old" ? oldResultMessage : emptyResultMessage;
+  const buttonLabel = state === "old" ? "重新生成新版 Listing" : "立即生成 Listing";
 
   return (
     <Card className="mt-8 p-8 text-center">
-      <Badge tone="warm">{state === "old" ? "旧版本结果" : "Not Generated"}</Badge>
+      <Badge tone="warm">{state === "old" ? "旧版本结果" : "尚未生成"}</Badge>
       <h2 className="mt-4 text-xl font-semibold text-ink">{message}</h2>
       <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-neutral-600">
         {state === "old"
           ? oldResultDescription
           : "点击重新生成后，Work UP 会基于当前项目资料输出 Final Listing、资料质量、策略、缺失信息和合规提醒。"}
       </p>
+      <div className="mt-6 flex justify-center">
+        <Button onClick={onRegenerate} disabled={isGenerating}>
+          <RefreshCw className="size-4" />
+          {isGenerating ? "生成中" : buttonLabel}
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -1073,11 +1246,13 @@ function EmptySection({ text }: { text: string }) {
   );
 }
 
-function MetaLine({ label, value }: { label: string; value: string }) {
+function MetaLine({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-2.5">
       <p className="text-[11px] font-semibold text-neutral-400">{label}</p>
-      <p className="mt-1 text-sm leading-6 text-neutral-700">{value || "-"}</p>
+      <p className="mt-1 text-sm leading-6 text-neutral-700">
+        {cleanDisplayText(value)}
+      </p>
     </div>
   );
 }

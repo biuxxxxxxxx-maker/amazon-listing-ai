@@ -54,6 +54,8 @@ const envValues = new Map([
   ],
 ]);
 const liveDeepSeekKey = process.env.DEEPSEEK_API_KEY?.trim() || "";
+const shouldRunLiveDeepSeekTest =
+  process.env.RUN_DEEPSEEK_LIVE_TEST === "true" && Boolean(liveDeepSeekKey);
 const calls = {
   buildProductBrief: 0,
   analyzeCompetitorInput: 0,
@@ -124,6 +126,74 @@ const aiListingModule = loadModule(sourceMap.get("../lib/ai-listing.ts"), requir
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function assertNoInvalidValues(value, path = "result") {
+  if (value === undefined || value === null) {
+    assert.fail(`${path} must not be ${value}`);
+  }
+
+  if (typeof value === "number" && Number.isNaN(value)) {
+    assert.fail(`${path} must not be NaN`);
+  }
+
+  if (typeof value === "string") {
+    assert.doesNotMatch(value, /\b(undefined|null|nan)\b/i, `${path} has invalid display text`);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoInvalidValues(item, `${path}[${index}]`));
+    return;
+  }
+
+  if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      assertNoInvalidValues(item, `${path}.${key}`);
+    }
+  }
+}
+
+function assertCompleteListingResult(result) {
+  assert.equal(result.schemaVersion, "workup.v1");
+  assert.equal(result.source, "deepseek");
+  assert.equal(typeof result.qualityScore.summary, "string");
+  assert.equal(typeof result.qualityScore.overall, "number");
+  assert.equal(typeof result.qualityScore.level, "string");
+  assert.equal(typeof result.finalListing.title.english, "string");
+  assert.equal(result.finalListing.bulletPoints.length, 5);
+  assert.equal(typeof result.finalListing.description.english, "string");
+  assert.equal(typeof result.finalListing.searchTerms.english, "string");
+  assert.ok(Array.isArray(result.missingInfo));
+  assert.ok(Array.isArray(result.assumptions));
+  assert.ok(Array.isArray(result.complianceNotes));
+  assert.ok(Array.isArray(result.improvementSuggestions));
+  assert.ok(result.missingInfo.length > 0);
+  assert.ok(result.assumptions.length > 0);
+  assert.ok(result.improvementSuggestions.length >= 3);
+
+  for (const item of result.missingInfo) {
+    assert.equal(typeof item.field, "string");
+    assert.equal(typeof item.whyItMatters, "string");
+    assert.equal(typeof item.example, "string");
+    assert.equal(typeof item.impactArea, "string");
+  }
+
+  for (const item of result.assumptions) {
+    assert.equal(typeof item.assumption, "string");
+    assert.equal(typeof item.reason, "string");
+    assert.equal(typeof item.confidence, "string");
+    assert.equal(typeof item.shouldVerifyWithUser, "boolean");
+  }
+
+  for (const item of result.complianceNotes) {
+    assert.equal(typeof item.riskLevel, "string");
+    assert.equal(typeof item.claim, "string");
+    assert.equal(typeof item.reason, "string");
+    assert.equal(typeof item.recommendation, "string");
+  }
+
+  assertNoInvalidValues(result);
 }
 
 function createValidResult(overrides = {}) {
@@ -261,6 +331,9 @@ assert.equal(lowInfoGeneration.result.productBrief.product.nameCn, "行李箱");
 assert.equal(lowInfoGeneration.result.competitorInsights, lastPromptContext.competitorInsights);
 assert.equal(lowInfoGeneration.result.listingStrategy, lastPromptContext.listingStrategy);
 assert.ok(lastRequestBody.messages[1].content.includes("productBrief"));
+assertCompleteListingResult(lowInfoGeneration.result);
+
+console.log(JSON.stringify(lowInfoGeneration.result, null, 2));
 
 const fencedJson = `\`\`\`json\n${JSON.stringify(createValidResult())}\n\`\`\``;
 assert.equal(aiListingModule.parseDeepSeekJsonResponse(fencedJson).source, "deepseek");
@@ -315,6 +388,55 @@ const normalizedSourceGeneration = await aiListingModule.generateAmazonListing({
 assert.equal(normalizedSourceGeneration.ok, true);
 assert.equal(normalizedSourceGeneration.source, "deepseek");
 assert.equal(normalizedSourceGeneration.result.source, "deepseek");
+assertCompleteListingResult(normalizedSourceGeneration.result);
+
+global.fetch = async () => {
+  const malformedResult = {
+    finalListing: {
+      title: { english: "Black ABS Suitcase", chineseExplanation: "基础标题。" },
+      bulletPoints: [
+        {
+          english: "ABS material is confirmed by the provided input.",
+          chineseExplanation: "基于已确认材质。",
+          sourceBasis: "confirmed_fact",
+          evidenceFields: ["material"],
+        },
+      ],
+      description: {
+        english: "A conservative suitcase listing based on confirmed input.",
+        chineseExplanation: "描述基于已确认资料。",
+      },
+      searchTerms: {
+        english: "black suitcase abs luggage",
+        chineseExplanation: "关键词保持安全。",
+      },
+    },
+    missingInfo: [{}, { field: "dimensions" }],
+    assumptions: [{}, { assumption: "General travel use is inferred from category." }],
+    complianceNotes: [{}],
+    improvementSuggestions: [{}],
+    analysis: {},
+  };
+
+  return new Response(
+    JSON.stringify({ choices: [{ message: { content: JSON.stringify(malformedResult) } }] }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+};
+
+const malformedGeneration = await aiListingModule.generateAmazonListing({
+  projectId: "project-malformed-fields",
+  userId: "user-1",
+  projectData: {
+    product_name_cn: "行李箱",
+    marketplace: "US",
+    category: "Travel & Luggage",
+    form_data: { color: "黑色", material: "ABS" },
+  },
+});
+
+assert.equal(malformedGeneration.ok, true);
+assertCompleteListingResult(malformedGeneration.result);
 
 global.fetch = async () => {
   const blockedClaimResult = clone(createValidResult());
@@ -369,10 +491,13 @@ await assert.rejects(
 assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("mock-generation-result"));
 assert.ok(!sourceMap.get("../lib/ai-listing.ts").includes("normalizeGenerationResult"));
 
-envValues.set("DEEPSEEK_API_KEY", liveDeepSeekKey);
+envValues.set(
+  "DEEPSEEK_API_KEY",
+  shouldRunLiveDeepSeekTest ? liveDeepSeekKey : "sk-deepseek-test-valid-format-key",
+);
 global.fetch = nativeFetch;
 
-if (liveDeepSeekKey) {
+if (shouldRunLiveDeepSeekTest) {
   const liveStart = Date.now();
   const liveGeneration = await aiListingModule.generateAmazonListing({
     projectId: "project-live-timing",
@@ -392,20 +517,11 @@ if (liveDeepSeekKey) {
   assert.equal(liveGeneration.ok, true);
   assert.equal(liveGeneration.source, "deepseek");
   assert.equal(liveGeneration.result.source, "deepseek");
-  assert.equal(liveGeneration.result.finalListing.bulletPoints.length, 5);
+  assertCompleteListingResult(liveGeneration.result);
 
   console.log(`DeepSeek live elapsedMs=${liveElapsedMs}`);
-  console.log(
-    JSON.stringify(
-      {
-        source: liveGeneration.source,
-        elapsedMs: liveElapsedMs,
-        model: liveGeneration.model,
-      },
-      null,
-      2,
-    ),
-  );
+  console.log(JSON.stringify(liveGeneration.result, null, 2));
+  console.log(JSON.stringify({ source: liveGeneration.source, elapsedMs: liveElapsedMs, model: liveGeneration.model }, null, 2));
 } else {
   console.log("DeepSeek live elapsedMs=skipped");
 }

@@ -133,6 +133,7 @@ export function ListingWizard() {
   const [needsChineseExplanation, setNeedsChineseExplanation] = useState(true);
   const [needsImageSuggestions, setNeedsImageSuggestions] = useState(true);
   const [saveError, setSaveError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<DraftField, string>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const isLast = currentStep === wizardSteps.length - 1;
   const guide = stepGuides[currentStep];
@@ -177,6 +178,63 @@ export function ListingWizard() {
 
   function updateField(field: DraftField, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function setStepValidationError(message: string, errors: Partial<Record<DraftField, string>>) {
+    setSaveError(message);
+    setFieldErrors(errors);
+  }
+
+  function validateCurrentStep(step: number) {
+    if (step !== 0) {
+      return true;
+    }
+
+    const nextErrors: Partial<Record<DraftField, string>> = {};
+
+    if (!draft.product_name_cn.trim()) {
+      nextErrors.product_name_cn = "产品中文名称不能为空。";
+    }
+
+    if (!draft.marketplace.trim()) {
+      nextErrors.marketplace = "Amazon 站点不能为空。";
+    }
+
+    if (!draft.category.trim()) {
+      nextErrors.category = "产品类目不能为空。";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setStepValidationError("请先补全当前步骤的必填项。", nextErrors);
+      return false;
+    }
+
+    setSaveError("");
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.product_name_cn;
+      delete next.marketplace;
+      delete next.category;
+      return next;
+    });
+    return true;
+  }
+
+  function handleNextStep() {
+    if (!validateCurrentStep(currentStep)) {
+      return;
+    }
+
+    setCurrentStep((step) => Math.min(wizardSteps.length - 1, step + 1));
   }
 
   function fieldProps(field: DraftField) {
@@ -195,6 +253,7 @@ export function ListingWizard() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     setSaveError("");
+    setFieldErrors({});
     setIsSaving(true);
 
     try {
@@ -204,6 +263,24 @@ export function ListingWizard() {
 
       if (!userId) {
         window.location.href = "/login";
+        return;
+      }
+
+      const requiredErrors: Partial<Record<DraftField, string>> = {};
+      const requiredFields: Array<[DraftField, string]> = [
+        ["product_name_cn", "产品中文名称不能为空。"],
+        ["marketplace", "Amazon 站点不能为空。"],
+        ["category", "产品类目不能为空。"],
+      ];
+
+      for (const [field, message] of requiredFields) {
+        if (!String(formData.get(field) || "").trim()) {
+          requiredErrors[field] = message;
+        }
+      }
+
+      if (Object.keys(requiredErrors).length > 0) {
+        setStepValidationError("请先补全当前步骤的必填项。", requiredErrors);
         return;
       }
 
@@ -271,12 +348,19 @@ export function ListingWizard() {
               </div>
             </div>
 
-            {currentStep === 0 ? <BasicInfoStep fieldProps={fieldProps} /> : null}
-            {currentStep === 1 ? <ProductMaterialStep fieldProps={fieldProps} /> : null}
-            {currentStep === 2 ? <CompetitorStep fieldProps={fieldProps} /> : null}
+            {currentStep === 0 ? (
+              <BasicInfoStep fieldProps={fieldProps} fieldErrors={fieldErrors} />
+            ) : null}
+            {currentStep === 1 ? (
+              <ProductMaterialStep fieldProps={fieldProps} fieldErrors={fieldErrors} />
+            ) : null}
+            {currentStep === 2 ? (
+              <CompetitorStep fieldProps={fieldProps} fieldErrors={fieldErrors} />
+            ) : null}
             {currentStep === 3 ? (
               <GenerationSettingsStep
                 fieldProps={fieldProps}
+                fieldErrors={fieldErrors}
                 needsChineseExplanation={needsChineseExplanation}
                 needsImageSuggestions={needsImageSuggestions}
                 setNeedsChineseExplanation={setNeedsChineseExplanation}
@@ -343,7 +427,7 @@ export function ListingWizard() {
               data-testid="listing-next-step"
               type="button"
               className="w-full sm:w-auto"
-              onClick={() => setCurrentStep((step) => Math.min(wizardSteps.length - 1, step + 1))}
+              onClick={handleNextStep}
             >
               下一步
               <ArrowRight className="size-4" />
@@ -359,11 +443,13 @@ function Field({
   label,
   hint,
   optional = false,
+  error,
   children,
 }: {
   label: string;
   hint?: string;
   optional?: boolean;
+  error?: string;
   children: ReactNode;
 }) {
   return (
@@ -374,6 +460,7 @@ function Field({
       </span>
       {children}
       {hint ? <span className="mt-2 block text-xs leading-5 text-neutral-500">{hint}</span> : null}
+      {error ? <span className="mt-2 block text-xs leading-5 text-red-600">{error}</span> : null}
     </label>
   );
 }
@@ -388,9 +475,10 @@ type StepProps = {
         | ChangeEvent<HTMLSelectElement>,
     ) => void;
   };
+  fieldErrors?: Partial<Record<DraftField, string>>;
 };
 
-function BasicInfoStep({ fieldProps }: StepProps) {
+function BasicInfoStep({ fieldProps, fieldErrors = {} }: StepProps) {
   return (
     <div className="space-y-7">
       <SectionHeader
@@ -399,13 +487,13 @@ function BasicInfoStep({ fieldProps }: StepProps) {
         description="只需要产品中文名、Amazon 站点和产品类目，就可以先保存 Draft。资料少也可以生成基础版 Listing，Work UP 会标注缺失信息和保守推断。"
       />
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="产品中文名称" hint="必填。建议写到具体形态，例如“行李箱”。">
+        <Field label="产品中文名称" hint="必填。建议写到具体形态，例如“行李箱”。" error={fieldErrors.product_name_cn}>
           <Input {...fieldProps("product_name_cn")} />
         </Field>
         <Field label="产品英文名称" hint="不确定可以先空着，后续 AI 会生成更自然的英文名。" optional>
           <Input placeholder="可选：留空让 AI 生成" {...fieldProps("product_name_en")} />
         </Field>
-        <Field label="Amazon 站点" hint="必填。第一阶段只做 Amazon，不做其他平台。">
+        <Field label="Amazon 站点" hint="必填。第一阶段只做 Amazon，不做其他平台。" error={fieldErrors.marketplace}>
           <Select {...fieldProps("marketplace")}>
             <option value="">请选择 Amazon 站点</option>
             <option value="US">US</option>
@@ -414,7 +502,7 @@ function BasicInfoStep({ fieldProps }: StepProps) {
             <option value="AU">AU</option>
           </Select>
         </Field>
-        <Field label="产品类目" hint="必填。可以先写 Amazon 大类目，例如 Travel & Luggage。">
+        <Field label="产品类目" hint="必填。可以先写 Amazon 大类目，例如 Travel & Luggage。" error={fieldErrors.category}>
           <Input {...fieldProps("category")} />
         </Field>
         <Field label="目标售价" hint="用于判断文案语气，暂不做利润计算。" optional>
