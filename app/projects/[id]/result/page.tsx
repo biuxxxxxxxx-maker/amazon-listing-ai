@@ -405,14 +405,14 @@ function formatBilingualTitle(value: unknown) {
   const english = cleanDisplayText(value);
   const chinese = translateDisplayText(english);
 
-  return chinese !== english ? `${english} / ${chinese}` : english;
+  return chinese !== english ? `${chinese} / ${english}` : english;
 }
 
 function formatBilingualLabel(value: string) {
   const normalized = normalizeTranslationKey(value);
   const chinese = displayLabelTranslationMap[normalized] || translateDisplayText(value);
 
-  return chinese !== value ? `${value} / ${chinese}` : value;
+  return chinese !== value ? `${chinese} / ${value}` : value;
 }
 
 function shouldShowBilingualSummary(value: string, translation: string) {
@@ -1025,8 +1025,8 @@ function FinalAmazonListing({
   return (
     <section id="final-listing" className="scroll-mt-24">
       <ResultBlock
-        title="Final Amazon Listing / 最终亚马逊 Listing"
-        eyebrow="Copy Ready / 可复制"
+        title="最终亚马逊 Listing / Final Amazon Listing"
+        eyebrow="可复制 / Copy Ready"
         description="这是第一优先级结果，可复制到 Amazon 后台；中文解释只用于理解。"
         copyText={copyTexts.full}
         copyLabel="复制完整 Listing"
@@ -1034,7 +1034,7 @@ function FinalAmazonListing({
         <div className="grid gap-5">
           <ListingFieldBlock
             id="title"
-            title="Amazon Title"
+            title="亚马逊标题 / Amazon Title"
             english={result.finalListing.title.english}
             chineseExplanation={result.finalListing.title.chineseExplanation}
             copyText={copyTexts.title}
@@ -1044,7 +1044,7 @@ function FinalAmazonListing({
           <div id="bullets" className="scroll-mt-24 overflow-hidden rounded-lg border border-line bg-white">
             <div className="flex flex-col gap-3 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-ink">Bullet Points</p>
+                <p className="text-sm font-semibold text-ink">五点描述 / Bullet Points</p>
                 <p className="mt-1 text-sm leading-6 text-neutral-500">
                   5 条英文 Bullet，下方分别提供中文翻译。
                 </p>
@@ -1063,7 +1063,7 @@ function FinalAmazonListing({
                       {String(index + 1).padStart(2, "0")}
                     </div>
                     <div className="min-w-0">
-                      <LanguageLabel>English Bullet</LanguageLabel>
+                      <LanguageLabel>英文原文 / English Bullet</LanguageLabel>
                       <p className="mt-2 text-[17px] font-semibold leading-8 text-ink sm:text-lg">
                         {bullet.english}
                       </p>
@@ -1086,7 +1086,7 @@ function FinalAmazonListing({
 
           <ListingFieldBlock
             id="description"
-            title="Product Description"
+            title="产品描述 / Product Description"
             english={result.finalListing.description.english}
             chineseExplanation={result.finalListing.description.chineseExplanation}
             copyText={copyTexts.description}
@@ -1095,7 +1095,7 @@ function FinalAmazonListing({
 
           <ListingFieldBlock
             id="search-terms"
-            title="Search Terms"
+            title="搜索关键词 / Search Terms"
             english={result.finalListing.searchTerms.english}
             chineseExplanation={result.finalListing.searchTerms.chineseExplanation}
             copyText={copyTexts.searchTerms}
@@ -1113,8 +1113,8 @@ function ListingQualityAndStrategy({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="quality-strategy"
-      title="Listing Quality & Strategy / Listing 质量与策略"
-      eyebrow="Strategy / 策略"
+      title="Listing 质量与策略 / Listing Quality & Strategy"
+      eyebrow="策略 / Strategy"
       description="展示资料质量、关键词策略、定位方向和 claim 边界。"
     >
       <div className="grid gap-4">
@@ -1161,8 +1161,8 @@ function MissingInfoSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="missing-info"
-      title="Missing Info / 缺失信息"
-      eyebrow="Input Quality / 输入质量"
+      title="缺失信息 / Missing Info"
+      eyebrow="输入质量 / Input Quality"
       description="这些缺失信息会影响 Listing 精度、合规边界或转化表达。"
     >
       {items.length > 0 ? (
@@ -1192,8 +1192,8 @@ function AssumptionsSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="assumptions"
-      title="Assumptions / 保守假设"
-      eyebrow="Conservative Inference / 保守推断"
+      title="保守假设 / Assumptions"
+      eyebrow="保守推断 / Conservative Inference"
       description="低信息输入时，系统做出的保守假设会在这里明示。"
     >
       {items.length > 0 ? (
@@ -1223,8 +1223,8 @@ function ComplianceNotesSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="compliance-notes"
-      title="Compliance Notes / 合规提醒"
-      eyebrow="Risk Control / 风险控制"
+      title="合规提醒 / Compliance Notes"
+      eyebrow="风险控制 / Risk Control"
       description="展示 DeepSeek 结果中的风险 claim、原因和建议处理方式。"
     >
       {items.length > 0 ? (
@@ -1260,8 +1260,8 @@ function CompetitorInsightsSection({
   return (
     <ResultBlock
       id="competitor-insights"
-      title="Competitor Insights / 竞品洞察"
-      eyebrow="Market Pattern / 市场模式"
+      title="竞品洞察 / Competitor Insights"
+      eyebrow="市场模式 / Market Pattern"
       description="竞品内容只用于关键词、市场模式、痛点和机会，不直接复制进 Final Listing。"
     >
       {!hasCompetitorInput ? (
@@ -1270,22 +1270,22 @@ function CompetitorInsightsSection({
         </SoftNote>
       ) : (
         <div className="grid gap-4">
-          <InfoList title="Keyword Patterns / 关键词模式" items={insights.keywordPatterns} />
-          <InfoList title="Buyer Pain Points / 买家痛点" items={insights.buyerPainPoints} />
-          <InfoList title="Competitor Angles / 竞品角度" items={insights.competitorAngles} />
+          <InfoList title="关键词模式 / Keyword Patterns" items={insights.keywordPatterns} />
+          <InfoList title="买家痛点 / Buyer Pain Points" items={insights.buyerPainPoints} />
+          <InfoList title="竞品角度 / Competitor Angles" items={insights.competitorAngles} />
           <InfoList
-            title="Opportunities / 机会点"
+            title="机会点 / Opportunities"
             items={insights.opportunities.map(
               (item) =>
                 `${item.opportunity}${item.requiredConfirmation ? ` Required: ${item.requiredConfirmation}` : ""}`,
             )}
           />
           <InfoList
-            title="Risky Claims / 风险声明"
+            title="风险声明 / Risky Claims"
             items={insights.riskyClaims.map((item) => `${item.claim}: ${item.reason}`)}
           />
           <InfoList
-            title="Blocked From Final Listing / 禁止进入最终 Listing"
+            title="禁止进入最终 Listing / Blocked From Final Listing"
             items={insights.blockedFromFinalListing.map(
               (item) => `${item.claim}: ${item.reason}`,
             )}
@@ -1313,13 +1313,13 @@ function ExpertAnalysisSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="expert-analysis"
-      title="Expert Suggestions / Analysis / 专家建议与分析"
-      eyebrow="Explanation / 说明"
+      title="专家建议与分析 / Expert Suggestions / Analysis"
+      eyebrow="说明 / Explanation"
       description="给新手看的运营解释和后续优化建议。"
     >
       <div className="grid gap-4">
         <InfoList
-          title="Improvement Suggestions / 优化建议"
+          title="优化建议 / Improvement Suggestions"
           items={suggestions}
         />
         <StructuredItem
@@ -1357,7 +1357,7 @@ function ListingFieldBlock({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-ink">{title}</p>
-          <LanguageLabel>English</LanguageLabel>
+          <LanguageLabel>英文原文 / English</LanguageLabel>
           <p className="mt-2 text-base font-semibold leading-7 text-ink">{english}</p>
         </div>
         <CopyButton text={copyText} label={copyLabel} className="w-full shrink-0 sm:w-auto" />
@@ -1571,7 +1571,7 @@ function BilingualDetailLine({ label, value }: { label: string; value: unknown }
       </p>
       {shouldShowBilingualSummary(english, chinese) ? (
         <p className="mt-2 text-sm font-semibold leading-6 text-ink">
-          {english} / {chinese}
+          {chinese} / {english}
         </p>
       ) : null}
       <div className="mt-2">

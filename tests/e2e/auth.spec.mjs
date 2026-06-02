@@ -22,7 +22,7 @@ test.describe("auth flow", () => {
     await expect(page.getByText("正在恢复登录状态...")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "登录 / 注册" })).toBeVisible();
     await expect(page.getByText("DeepSeek 生成会在第三阶段启用。")).toHaveCount(0);
-    await expect(page.getByText("登录后可以保存 Draft，并在结果页调用 DeepSeek 生成正式 Listing。")).toBeVisible();
+    await expect(page.getByText("登录后可以保存草稿，并在结果页调用 DeepSeek 生成正式 Listing。")).toBeVisible();
     await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
     await expect(page.getByPlaceholder("输入密码，至少 6 位")).toBeVisible();
     await expect(page.getByLabel("保持登录状态")).toBeChecked();
@@ -152,6 +152,10 @@ test.describe("auth flow", () => {
     await page.getByTestId("auth-password-input").fill(process.env.E2E_TEST_PASSWORD || "e2e-password");
     await page.getByTestId("auth-submit-button").click();
     await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByText("控制台 / Dashboard")).toBeVisible();
+    await expect(page.getByText("草稿 / Draft")).toBeVisible();
+    await expect(page.getByText("已生成 / Generated")).toBeVisible();
+    await expect(page.getByText("更新于")).toBeVisible();
     await expect(page.getByTestId("user-menu-button")).toBeVisible();
     await page.getByTestId("user-menu-button").click();
     await expect(page.getByRole("menuitem", { name: "进入控制台" })).toBeVisible();

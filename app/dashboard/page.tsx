@@ -49,6 +49,7 @@ function mapProject(row: ProductProjectRow): Project {
 
 function ProjectStatusBadge({ status }: { status: Project["status"] }) {
   const isGenerated = status === "Generated";
+  const label = isGenerated ? "已生成 / Generated" : "草稿 / Draft";
 
   return (
     <span
@@ -58,7 +59,7 @@ function ProjectStatusBadge({ status }: { status: Project["status"] }) {
           : "inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
       }
     >
-      {status}
+      {label}
     </span>
   );
 }
@@ -151,12 +152,12 @@ export default function DashboardPage() {
         icon: FileText,
       },
       {
-        label: "Draft",
+        label: "草稿 / Draft",
         value: dashboardProjects.filter((project) => project.status === "Draft").length,
         icon: ClipboardList,
       },
       {
-        label: "Generated",
+        label: "已生成 / Generated",
         value: dashboardProjects.filter((project) => project.status === "Generated").length,
         icon: Sparkles,
       },
@@ -173,7 +174,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl">
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-600">
-                Dashboard
+                控制台 / Dashboard
               </p>
               <h1 className="mt-3 text-2xl font-bold text-slate-900 sm:text-3xl">
                 欢迎回来
@@ -192,7 +193,7 @@ export default function DashboardPage() {
 
           {created ? (
             <div className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
-              Draft 项目已保存，并会出现在下方最近项目列表中。
+              草稿项目已保存，并会出现在下方最近项目列表中。
             </div>
           ) : null}
 
@@ -228,11 +229,11 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-lg font-semibold text-slate-900">最近项目</h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                查看 Draft 和 Generated 项目，继续编辑或进入结果页。
+                查看草稿和已生成项目，继续编辑或进入结果页。
               </p>
             </div>
             <span className="text-sm text-slate-500">
-              {supabaseReady ? "Supabase projects" : "Preview projects"}
+              {supabaseReady ? "Supabase 项目" : "预览项目"}
             </span>
           </div>
 
@@ -281,7 +282,7 @@ export default function DashboardPage() {
                     </p>
                     <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-slate-500">
                       <CalendarClock className="size-4" />
-                      Updated {project.updatedAt || "-"}
+                      更新于 {project.updatedAt || "-"}
                     </p>
                   </div>
 

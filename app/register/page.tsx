@@ -21,7 +21,7 @@ export default function RegisterPage() {
         </nav>
         <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
-            <Badge tone="warm">Create Account</Badge>
+            <Badge tone="warm">创建账号 / Create Account</Badge>
             <h1 className="mt-3 text-4xl font-semibold leading-tight text-ink sm:text-5xl">
               创建账号后保存你的 Listing 项目。
             </h1>
@@ -44,7 +44,7 @@ export default function RegisterPage() {
                 </div>
                 <p className="mt-3 text-sm font-semibold text-ink">项目保存</p>
                 <p className="mt-1 text-sm leading-6 text-neutral-600">
-                  注册后进入 Dashboard，继续创建 Amazon Listing 项目。
+                  注册后进入工作台，继续创建 Amazon Listing 项目。
                 </p>
               </Card>
             </div>

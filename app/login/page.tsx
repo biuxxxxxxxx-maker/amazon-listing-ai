@@ -21,12 +21,12 @@ export default function LoginPage() {
         </nav>
         <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
-            <Badge tone="warm">Email Login</Badge>
+            <Badge tone="warm">邮箱登录 / Email Login</Badge>
             <h1 className="mt-3 text-4xl font-semibold leading-tight text-ink sm:text-5xl">
               登录后继续管理你的 Amazon Listing 项目。
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-neutral-600">
-              使用 Supabase Auth 登录后，可以保存 Draft、查看历史项目，并在结果页调用 DeepSeek 生成正式 Listing。
+              使用 Supabase Auth 登录后，可以保存草稿、查看历史项目，并在结果页调用 DeepSeek 生成正式 Listing。
             </p>
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <Card className="p-4">
@@ -66,11 +66,11 @@ export default function LoginPage() {
             <AuthForm />
             <div className="mx-6 rounded-lg border border-line bg-paper p-4 sm:mx-8">
               <div className="flex gap-3">
-                <Badge tone="neutral">Phase 1</Badge>
+                <Badge tone="neutral">第一阶段 / Phase 1</Badge>
                 <div>
                   <p className="text-sm font-semibold text-ink">当前阶段</p>
                   <p className="mt-1 text-sm leading-6 text-neutral-600">
-                    登录后可以保存 Draft，并在结果页调用 DeepSeek 生成正式 Listing。
+                    登录后可以保存草稿，并在结果页调用 DeepSeek 生成正式 Listing。
                   </p>
                 </div>
               </div>

@@ -551,7 +551,8 @@ test.describe("listing creation and generation flow", () => {
     await signInWithMockSession(page);
     await page.goto("/projects/new");
     await expect(page.getByRole("heading", { name: "创建 Amazon Listing 项目" })).toBeVisible();
-    await expect(page.getByText("Step 1 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 1 / 4")).toBeVisible();
+    await expect(page.getByText("仅 Amazon")).toBeVisible();
     await expect(page.getByLabel("产品中文名称")).toHaveValue("");
     await expect(page.getByLabel("产品英文名称")).toHaveValue("");
     await expect(page.getByLabel("Amazon 站点")).toHaveValue("");
@@ -569,14 +570,14 @@ test.describe("listing creation and generation flow", () => {
     await expect(generationRequests).toHaveLength(0);
 
     await page.getByTestId("listing-next-step").click();
-    await expect(page.getByText("Step 2 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 2 / 4")).toBeVisible();
     await page.getByLabel("颜色").fill("黑色");
     await page.getByLabel("材质").fill("ABS");
     await page.getByLabel("使用场景").fill("机场、学校、短途旅行");
     await page.getByTestId("listing-next-step").click();
-    await expect(page.getByText("Step 3 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 3 / 4")).toBeVisible();
     await page.getByTestId("listing-next-step").click();
-    await expect(page.getByText("Step 4 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 4 / 4")).toBeVisible();
     await expect(generationRequests).toHaveLength(0);
 
     const draftSubmit = page.getByTestId("listing-draft-submit");
@@ -617,11 +618,11 @@ test.describe("listing creation and generation flow", () => {
     expect(generationRequests[0].body.projectData.form_data.material).toBe("ABS");
     expect(generationRequests[0].authorization).toMatch(/^Bearer\s+e2e-access-token/);
     expect(JSON.stringify(generationRequests[0].body)).toContain("行李箱");
-    await expect(page.getByRole("heading", { name: "Final Amazon Listing" })).toBeVisible();
-    await expect(page.locator("#title").getByText("Amazon Title")).toBeVisible();
-    await expect(page.locator("#bullets").getByText("Bullet Points").first()).toBeVisible();
-    await expect(page.locator("#description").getByText("Product Description")).toBeVisible();
-    await expect(page.locator("#search-terms").getByText("Search Terms", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最终亚马逊 Listing / Final Amazon Listing" })).toBeVisible();
+    await expect(page.locator("#title").getByText("亚马逊标题 / Amazon Title")).toBeVisible();
+    await expect(page.locator("#bullets").getByText("五点描述 / Bullet Points").first()).toBeVisible();
+    await expect(page.locator("#description").getByText("产品描述 / Product Description")).toBeVisible();
+    await expect(page.locator("#search-terms").getByText("搜索关键词 / Search Terms")).toBeVisible();
     await expect(page.locator("#final-listing")).toContainText("中文翻译");
     await expect(page.locator("#final-listing")).not.toContainText("Chinese Explanation");
     await expect(page.getByRole("button", { name: "复制完整 Listing" })).toBeVisible();
@@ -629,7 +630,7 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByRole("button", { name: "复制五点" })).toBeVisible();
     await expect(page.getByRole("button", { name: "复制描述" })).toBeVisible();
     await expect(page.getByRole("button", { name: "复制关键词" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Listing Quality & Strategy" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Listing 质量与策略 / Listing Quality & Strategy" })).toBeVisible();
     await expect(page.locator("#quality-strategy")).toContainText("卖点排序 / Selling Point Order");
     await expect(page.locator("#quality-strategy")).toContainText("英文原文");
     await expect(page.locator("#quality-strategy")).toContainText("中文翻译");
@@ -642,21 +643,21 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByRole("heading", { name: "Missing Info" })).toBeVisible();
     await expect(page.locator("#missing-info")).toContainText("英文原文");
     await expect(page.locator("#missing-info")).toContainText("中文翻译");
-    await expect(page.locator("#missing-info")).toContainText("weight / 重量");
-    await expect(page.locator("#missing-info")).toContainText("Why It Matters / 为什么重要");
-    await expect(page.locator("#missing-info")).toContainText("bulletPoints / 五点描述");
-    await expect(page.getByRole("heading", { name: "Compliance Notes" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Expert Suggestions / Analysis" })).toBeVisible();
-    await expect(page.locator("#expert-analysis")).toContainText("Improvement Suggestions / 优化建议");
+    await expect(page.locator("#missing-info")).toContainText("重量 / weight");
+    await expect(page.locator("#missing-info")).toContainText("为什么重要 / Why It Matters");
+    await expect(page.locator("#missing-info")).toContainText("五点描述 / bulletPoints");
+    await expect(page.getByRole("heading", { name: "合规提醒 / Compliance Notes" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "专家建议与分析 / Expert Suggestions / Analysis" })).toBeVisible();
+    await expect(page.locator("#expert-analysis")).toContainText("优化建议 / Improvement Suggestions");
     await expect(page.locator("#expert-analysis")).toContainText("英文原文");
     await expect(page.locator("#expert-analysis")).toContainText("中文翻译");
-    await expect(page.locator("#expert-analysis")).toContainText("Product Summary / 产品总结");
+    await expect(page.locator("#expert-analysis")).toContainText("产品总结 / Product Summary");
     await expect(page.locator("#expert-analysis")).toContainText("high: 补充尺寸、轮子和锁具信息。");
     await expect(page.locator("#expert-analysis")).toContainText("高优先级");
     await expect(page.locator("#expert-analysis")).toContainText("五点描述");
     await expect(page.getByText("Black PC Hard Shell Suitcase for Practical Travel Use")).toBeVisible();
     await expect(page.getByTestId("final-listing-bullet")).toHaveCount(5);
-    await expect(page.getByText("Search Terms", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("搜索关键词 / Search Terms").first()).toBeVisible();
     await expect(page.getByText("dimensions")).toBeVisible();
     await expect(page.getByText("Improvement Suggestions")).toBeVisible();
     await expect(page.locator("body")).not.toContainText(/\bundefined\b/i);
@@ -694,7 +695,7 @@ test.describe("listing creation and generation flow", () => {
     await page.getByTestId("regenerate-listing-button").click();
     await secondGenerationResponse;
     expect(generationRequests).toHaveLength(2);
-    await expect(page.getByRole("heading", { name: "Final Amazon Listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最终亚马逊 Listing / Final Amazon Listing" })).toBeVisible();
 
     await page.getByRole("button", { name: "保存结果" }).click();
     await expect.poll(() => savedGenerationRows.length).toBeGreaterThanOrEqual(2);
@@ -761,19 +762,19 @@ test.describe("listing creation and generation flow", () => {
 
     await signInWithMockSession(page);
     await page.goto("/projects/new");
-    await expect(page.getByText("Step 1 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 1 / 4")).toBeVisible();
     await page.getByTestId("listing-next-step").click();
     await expect(page.getByText("请先补全当前步骤的必填项。")).toBeVisible();
     await expect(page.getByText("产品中文名称不能为空。")).toBeVisible();
     await expect(page.getByText("Amazon 站点不能为空。")).toBeVisible();
     await expect(page.getByText("产品类目不能为空。")).toBeVisible();
-    await expect(page.getByText("Step 1 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 1 / 4")).toBeVisible();
     expect(savedProjectRows).toHaveLength(0);
 
     await page.getByLabel("产品中文名称").fill("行李箱");
     await page.getByTestId("listing-next-step").click();
     await expect(page.getByText("Amazon 站点不能为空。")).toBeVisible();
-    await expect(page.getByText("Step 1 / 4")).toBeVisible();
+    await expect(page.getByText("步骤 1 / 4")).toBeVisible();
     expect(savedProjectRows).toHaveLength(0);
   });
 
@@ -869,14 +870,14 @@ test.describe("listing creation and generation flow", () => {
     await page.getByTestId("regenerate-listing-button").click();
     await firstResponse;
     await expect(page.getByText("DeepSeek 已生成", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Final Amazon Listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最终亚马逊 Listing / Final Amazon Listing" })).toBeVisible();
     await expect(page.getByText(/22 x 14 x 9 inch/i)).toBeVisible();
     await expect(page.locator("#bullets")).toContainText("38L");
     await expect(page.locator("#bullets")).toContainText("TSA lock");
     await expect(page.getByTestId("final-listing-bullet")).toHaveCount(5);
-    await expect(page.getByText("Search Terms", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Missing Info" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Expert Suggestions / Analysis" })).toBeVisible();
+    await expect(page.getByText("搜索关键词 / Search Terms")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "缺失信息 / Missing Info" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "专家建议与分析 / Expert Suggestions / Analysis" })).toBeVisible();
     await expect(page.getByText("Compliance Notes")).toBeVisible();
     await expect(page.getByText("防摔 / 100% 防刮")).toBeVisible();
     await page.getByRole("button", { name: "复制英文 Listing" }).click();

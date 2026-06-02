@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 const projectErrors: Record<string, string> = {
-  missing_env: "Supabase 环境变量还没配置。请先填写 .env.local，再保存 Draft。",
+  missing_env: "Supabase 环境变量还没配置。请先填写 .env.local，再保存草稿。",
   save_failed: "项目保存失败，请检查登录状态、数据库表和 RLS 策略。",
 };
 

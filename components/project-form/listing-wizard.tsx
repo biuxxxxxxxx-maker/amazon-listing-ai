@@ -64,7 +64,7 @@ const stepGuides = [
   {
     title: "先定产品边界",
     score: "三项必填",
-    impact: "只要产品中文名、Amazon 站点和类目完整，就可以保存 Draft 并生成基础版 Listing。",
+    impact: "只要产品中文名、Amazon 站点和类目完整，就可以保存草稿并生成基础版 Listing。",
     tips: ["资料少也可以生成基础版", "资料越真实，生成越准确", "英文名没有把握可以空着"],
   },
   {
@@ -330,9 +330,9 @@ export function ListingWizard() {
             <div className="mb-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="warm">
-                  Step {currentStep + 1} / {wizardSteps.length}
+                  步骤 {currentStep + 1} / {wizardSteps.length}
                 </Badge>
-                <Badge tone="neutral">Amazon Only</Badge>
+                <Badge tone="neutral">仅 Amazon</Badge>
               </div>
               <h2 className="mt-4 text-2xl font-semibold text-ink">
                 {wizardSteps[currentStep].title}
@@ -418,7 +418,7 @@ export function ListingWizard() {
               className="w-full sm:w-auto"
               disabled={isSaving}
             >
-              {isSaving ? "保存中..." : "保存 Draft"}
+              {isSaving ? "保存中..." : "保存草稿"}
               <Check className="size-4" />
             </Button>
           ) : (
@@ -484,7 +484,7 @@ function BasicInfoStep({ fieldProps, fieldErrors = {} }: StepProps) {
       <SectionHeader
         icon={<Sparkles className="size-4" />}
         title="基础必填"
-        description="只需要产品中文名、Amazon 站点和产品类目，就可以先保存 Draft。资料少也可以生成基础版 Listing，Work UP 会标注缺失信息和保守推断。"
+        description="只需要产品中文名、Amazon 站点和产品类目，就可以先保存草稿。资料少也可以生成基础版 Listing，Work UP 会标注缺失信息和保守推断。"
       />
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="产品中文名称" hint="必填。建议写到具体形态，例如“行李箱”。" error={fieldErrors.product_name_cn}>
@@ -615,7 +615,7 @@ function GenerationSettingsStep({
       <SectionHeader
         icon={<Sparkles className="size-4" />}
         title="输出偏好"
-        description="这些设置会随原始 Draft 一起保存。低信息输入不会被阻止，Work UP 会用保守策略生成并提示你补资料。"
+        description="这些设置会随原始草稿一起保存。低信息输入不会被阻止，Work UP 会用保守策略生成并提示你补资料。"
       />
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="英文风格" hint="新手默认推荐自然本地化，英文更像真实 Amazon 卖家写法。">
@@ -677,10 +677,10 @@ function GeneratePreview() {
         <div>
           <p className="text-sm font-semibold text-ink">生成前确认</p>
           <p className="mt-1 text-sm leading-6 text-neutral-600">
-            保存 Draft 后会进入结果页，点击重新生成才会调用 DeepSeek 输出下列 Amazon Listing 模块。
+            保存草稿后会进入结果页，点击重新生成才会调用 DeepSeek 输出下列 Amazon Listing 模块。
           </p>
         </div>
-        <Badge tone="green">Ready</Badge>
+        <Badge tone="green">已准备 / Ready</Badge>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {generationModules.map((item) => {
@@ -700,7 +700,7 @@ function GeneratePreview() {
         })}
       </div>
       <div className="mt-4 rounded-lg bg-amberSoft p-3 text-sm leading-6 text-[#8a5a1e]">
-        小白提示：保存 Draft 不会调用 AI；只有进入结果页并点击重新生成，才会发起正式生成。
+        小白提示：保存草稿不会调用 AI；只有进入结果页并点击重新生成，才会发起正式生成。
       </div>
     </div>
   );
