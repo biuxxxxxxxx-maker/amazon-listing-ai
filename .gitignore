@@ -18,3 +18,5 @@ cloudflare-env.d.ts
 *.log
 playwright-report
 test-results
+
+.vercel
