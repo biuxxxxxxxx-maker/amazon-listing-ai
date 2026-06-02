@@ -37,6 +37,7 @@ export function buildListingUserPrompt(
     "Do not return schemaVersion, source, generatedAt, model, qualityScore, productBrief, competitorInsights, or listingStrategy; the server will fill them.",
     "finalListing must contain title, exactly 5 bulletPoints, description, and searchTerms.",
     'Each finalListing field must include "english" and "chineseExplanation".',
+    'For finalListing only, every "chineseExplanation" must first translate the adjacent English copy into Chinese; do not merely explain why the copy was written.',
     'Each bulletPoint must also include "sourceBasis" and "evidenceFields".',
     'sourceBasis must be one of "confirmed_fact", "safe_inference", or "competitor_inspired".',
     "Keep every english field English only.",

@@ -90,12 +90,38 @@ const workUpGenerationResult = {
       useCases: ["travel use"],
       tone: "professional",
     },
-    sellingPointOrder: [1, 2, 3, 4, 5].map((rank) => ({
-      rank,
-      sellingPoint: `Selling point ${rank}`,
-      reason: "Follow Work UP conservative strategy.",
-      evidenceFields: ["confirmedFacts"],
-    })),
+    sellingPointOrder: [
+      {
+        rank: 1,
+        sellingPoint: "PC shell wording",
+        reason: "Use confirmed material without adding unsupported claims.",
+        evidenceFields: ["material"],
+      },
+      {
+        rank: 2,
+        sellingPoint: "Practical travel use",
+        reason: "Use cases help buyers understand where the product fits without inventing specs.",
+        evidenceFields: ["category"],
+      },
+      {
+        rank: 3,
+        sellingPoint: "Black appearance based on confirmed input",
+        reason: "Confirmed facts should rank before competitor-inspired ideas.",
+        evidenceFields: ["color"],
+      },
+      {
+        rank: 4,
+        sellingPoint: "General buyer concern response without unsupported features",
+        reason: "Pain points can shape messaging, but unconfirmed competitor features stay out.",
+        evidenceFields: ["category"],
+      },
+      {
+        rank: 5,
+        sellingPoint: "Practical purchase confidence with conservative compliance wording",
+        reason: "Close with trust and clarity while avoiding unsupported guarantees or high-risk claims.",
+        evidenceFields: ["avoidClaims", "safeClaims"],
+      },
+    ],
     avoidClaims: [{ claim: "TSA lock", reason: "Unconfirmed." }],
     safeClaims: [{ claim: "PC shell", evidence: "material confirmed by user input" }],
   },
@@ -604,6 +630,15 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByRole("button", { name: "复制描述" })).toBeVisible();
     await expect(page.getByRole("button", { name: "复制关键词" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Listing Quality & Strategy" })).toBeVisible();
+    await expect(page.locator("#quality-strategy")).toContainText("卖点排序 / Selling Point Order");
+    await expect(page.locator("#quality-strategy")).toContainText("英文原文");
+    await expect(page.locator("#quality-strategy")).toContainText("中文翻译");
+    await expect(page.locator("#quality-strategy")).toContainText("PC 外壳文案：使用已确认材质，不添加未经支持的声明。");
+    await expect(page.locator("#quality-strategy")).toContainText("避免使用的声明 / Avoid Claims");
+    await expect(page.locator("#quality-strategy")).toContainText("TSA 锁");
+    await expect(page.locator("#quality-strategy")).toContainText("未确认。");
+    await expect(page.locator("#quality-strategy")).toContainText("安全可用声明 / Safe Claims");
+    await expect(page.locator("#quality-strategy")).toContainText("PC 外壳");
     await expect(page.getByRole("heading", { name: "Missing Info" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Compliance Notes" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Expert Suggestions / Analysis" })).toBeVisible();

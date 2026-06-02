@@ -280,6 +280,7 @@ global.fetch = async (url, init) => {
   assert.match(lastRequestBody.messages[1].content, /黑色/);
   assert.match(lastRequestBody.messages[1].content, /ABS/);
   assert.match(lastRequestBody.messages[1].content, /Do not return schemaVersion/);
+  assert.match(lastRequestBody.messages[1].content, /must first translate the adjacent English copy into Chinese/);
 
   return new Response(
     JSON.stringify({

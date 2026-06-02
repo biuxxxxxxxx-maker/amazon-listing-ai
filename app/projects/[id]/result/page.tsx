@@ -148,6 +148,132 @@ function joinDisplayParts(parts: unknown[], separator = ": ") {
   return compactTextItems(parts).join(separator);
 }
 
+function normalizeTranslationKey(value: unknown) {
+  return cleanDisplayText(value, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const claimTranslationMap: Record<string, string> = {
+  "tsa lock": "TSA 锁",
+  "spinner wheels": "万向轮",
+  "airline approved": "航空公司批准",
+  waterproof: "防水",
+  "scratch-proof": "防刮",
+  "scratch proof": "防刮",
+  "scratch resistant": "耐刮",
+  unbreakable: "不可破坏",
+  "lifetime warranty": "终身保修",
+  guaranteed: "保证",
+  "best seller": "畅销商品",
+  "medical grade": "医疗级",
+  "fda approved": "FDA 批准",
+  antibacterial: "抗菌",
+  "heavy-duty": "重型承重",
+  "heavy duty": "重型承重",
+  "pc shell": "PC 外壳",
+  "abs shell": "ABS 外壳",
+  "black color": "黑色",
+  "travel suitcase": "旅行行李箱",
+};
+
+const strategyTextTranslationMap: Record<string, string> = {
+  "pc shell wording": "PC 外壳文案",
+  "abs travel suitcase identity": "ABS 旅行行李箱定位",
+  "plastic travel suitcase identity": "塑料旅行行李箱定位",
+  "practical travel use": "实用旅行用途",
+  "black appearance based on confirmed input": "基于已确认输入的黑色外观",
+  "general buyer concern response without unsupported features": "不添加无依据功能的通用买家关切回应",
+  "practical purchase confidence with conservative compliance wording": "用保守合规措辞建立购买信心",
+  "lead with product identity, category, and confirmed material when available.": "优先展示产品身份、类目和已确认材质。",
+  "use confirmed material without adding unsupported claims.": "使用已确认材质，不添加未经支持的声明。",
+  "use cases help buyers understand where the product fits without inventing specs.": "用使用场景帮助买家理解产品适用位置，不编造规格。",
+  "confirmed facts should rank before competitor-inspired ideas.": "已确认事实应优先于竞品启发的表达。",
+  "pain points can shape messaging, but unconfirmed competitor features stay out.": "买家痛点可以影响表达，但未经确认的竞品功能不能进入文案。",
+  "close with trust and clarity while avoiding unsupported guarantees or high-risk claims.": "用清晰可信的表达收尾，同时避免无依据保证或高风险声明。",
+  "common high-risk claim without confirmed product proof.": "常见高风险声明，当前没有已确认的产品证明。",
+  "unconfirmed.": "未确认。",
+  "confirmed material.": "已确认材质。",
+  "confirmed product material.": "已确认产品材质。",
+  "material confirmed by user input": "材质来自用户确认输入。",
+  "color confirmed by user input": "颜色来自用户确认输入。",
+  "category confirmed by user input": "类目来自用户确认输入。",
+};
+
+const evidenceFieldTranslationMap: Record<string, string> = {
+  material: "材质",
+  category: "类目",
+  color: "颜色",
+  avoidclaims: "避免声明",
+  safeclaims: "安全声明",
+  productnamecn: "中文品名",
+  productnameen: "英文品名",
+  marketplace: "站点",
+  targetcustomer: "目标客户",
+  usecases: "使用场景",
+};
+
+function translateStrategyText(value: unknown) {
+  const text = cleanDisplayText(value);
+  const normalized = normalizeTranslationKey(text);
+  const translated = strategyTextTranslationMap[normalized];
+
+  if (translated) {
+    return translated;
+  }
+
+  if (normalized.includes("appearance based on confirmed input")) {
+    const descriptor = text.replace(/appearance based on confirmed input/i, "").trim();
+    return descriptor ? `${descriptor}外观基于已确认输入` : "外观基于已确认输入";
+  }
+
+  if (normalized.includes("travel suitcase identity")) {
+    const descriptor = text.replace(/travel suitcase identity/i, "").trim();
+    return descriptor ? `${descriptor}旅行行李箱定位` : "旅行行李箱定位";
+  }
+
+  return text;
+}
+
+function translateClaim(value: unknown) {
+  const text = cleanDisplayText(value);
+  const normalized = normalizeTranslationKey(text);
+  const translated = claimTranslationMap[normalized];
+
+  if (translated) {
+    return translated;
+  }
+
+  if (normalized.includes("material")) {
+    const descriptor = text.replace(/material/i, "").trim();
+    return descriptor ? `${descriptor}材质` : "材质";
+  }
+
+  if (normalized.includes("color")) {
+    const descriptor = text.replace(/color/i, "").trim();
+    return descriptor ? `${descriptor}颜色` : "颜色";
+  }
+
+  return text;
+}
+
+function translateEvidenceFields(fields: string[]) {
+  return compactTextItems(fields).map((field) => {
+    const normalized = normalizeTranslationKey(field).replace(/[^a-z0-9]/g, "");
+    return evidenceFieldTranslationMap[normalized] || field;
+  });
+}
+
+function translateSellingPointOrderItem(
+  item: GenerationResult["listingStrategy"]["sellingPointOrder"][number],
+) {
+  const sellingPoint = translateStrategyText(item.sellingPoint);
+  const reason = translateStrategyText(item.reason);
+  const evidenceFields = translateEvidenceFields(item.evidenceFields);
+  const evidenceText =
+    evidenceFields.length > 0 ? `（依据：${evidenceFields.join("、")}）` : "";
+
+  return `${item.rank}. ${sellingPoint}：${reason}${evidenceText}`;
+}
+
 function isCompleteWorkUpGenerationResult(value: unknown): value is GenerationResult {
   if (!isRecord(value)) {
     return false;
@@ -836,27 +962,36 @@ function ListingQualityAndStrategy({ result }: { result: GenerationResult }) {
     >
       <div className="grid gap-4">
         <div className="grid gap-3 sm:grid-cols-3">
-          <InfoCard label="Quality Level" value={result.qualityScore.level} />
-          <InfoCard label="Overall Score" value={String(result.qualityScore.overall)} />
-          <InfoCard label="Primary Keyword" value={strategy.primaryKeyword} />
+          <InfoCard label="质量等级 / Quality Level" value={result.qualityScore.level} />
+          <InfoCard label="总分 / Overall Score" value={String(result.qualityScore.overall)} />
+          <InfoCard label="主关键词 / Primary Keyword" value={strategy.primaryKeyword} />
         </div>
-        <SoftNote label="Quality Summary">{result.qualityScore.summary}</SoftNote>
-        <InfoList title="Secondary Keywords" items={strategy.secondaryKeywords} />
-        <InfoCard label="Positioning Direction" value={strategy.positioning.direction} />
-        <RankedList
-          title="Selling Point Order"
-          items={strategy.sellingPointOrder.map(
-            (item) =>
-              `${item.rank}. ${item.sellingPoint} — ${item.reason} (${item.evidenceFields.join(", ")})`,
-          )}
+        <SoftNote label="质量总结 / Quality Summary">{result.qualityScore.summary}</SoftNote>
+        <InfoList title="辅助关键词 / Secondary Keywords" items={strategy.secondaryKeywords} />
+        <InfoCard label="定位方向 / Positioning Direction" value={strategy.positioning.direction} />
+        <BilingualList
+          title="卖点排序 / Selling Point Order"
+          items={strategy.sellingPointOrder.map((item) => ({
+            key: `${item.rank}-${item.sellingPoint}`,
+            english: `${item.rank}. ${item.sellingPoint} — ${item.reason} (${item.evidenceFields.join(", ")})`,
+            chinese: translateSellingPointOrderItem(item),
+          }))}
         />
-        <InfoList
-          title="Avoid Claims"
-          items={strategy.avoidClaims.map((item) => `${item.claim}: ${item.reason}`)}
+        <BilingualList
+          title="避免使用的声明 / Avoid Claims"
+          items={strategy.avoidClaims.map((item) => ({
+            key: `${item.claim}-${item.reason}`,
+            english: `${item.claim}: ${item.reason}`,
+            chinese: `${translateClaim(item.claim)}：${translateStrategyText(item.reason)}`,
+          }))}
         />
-        <InfoList
-          title="Safe Claims"
-          items={strategy.safeClaims.map((item) => `${item.claim}: ${item.evidence}`)}
+        <BilingualList
+          title="安全可用声明 / Safe Claims"
+          items={strategy.safeClaims.map((item) => ({
+            key: `${item.claim}-${item.evidence}`,
+            english: `${item.claim}: ${item.evidence}`,
+            chinese: `${translateClaim(item.claim)}：${translateStrategyText(item.evidence)}`,
+          }))}
         />
       </div>
     </ResultBlock>
@@ -1145,17 +1280,39 @@ function InfoList({
   );
 }
 
-function RankedList({ title, items }: { title: string; items: string[] }) {
+function BilingualList({
+  title,
+  items,
+  emptyText = "No usable data provided.",
+}: {
+  title: string;
+  items: Array<{ key: string; english: string; chinese: string }>;
+  emptyText?: string;
+}) {
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-white">
       <div className="border-b border-line px-4 py-3">
         <p className="text-sm font-semibold text-ink">{title}</p>
       </div>
-      {items.map((item) => (
-        <p key={item} className="border-b border-line px-4 py-3 text-sm leading-6 text-neutral-700 last:border-b-0">
-          {item}
-        </p>
-      ))}
+      {items.length > 0 ? (
+        items.map((item) => (
+          <article
+            key={item.key}
+            className="border-b border-line px-4 py-4 last:border-b-0"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+              英文原文
+            </p>
+            <p className="mt-1 text-sm leading-6 text-neutral-700">{item.english}</p>
+            <div className="mt-3 rounded-lg bg-neutral-50 p-3">
+              <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
+              <p className="mt-1 text-sm leading-6 text-neutral-600">{item.chinese}</p>
+            </div>
+          </article>
+        ))
+      ) : (
+        <p className="px-4 py-3 text-sm leading-6 text-neutral-500">{emptyText}</p>
+      )}
     </div>
   );
 }
