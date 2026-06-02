@@ -743,10 +743,10 @@ function FinalAmazonListing({
     <section id="final-listing" className="scroll-mt-24">
       <ResultBlock
         title="Final Amazon Listing"
-        eyebrow="Copy Ready"
+        eyebrow="可复制"
         description="这是第一优先级结果，可复制到 Amazon 后台；中文解释只用于理解。"
         copyText={copyTexts.full}
-        copyLabel="Copy Full Listing"
+        copyLabel="复制完整 Listing"
       >
         <div className="grid gap-5">
           <ListingFieldBlock
@@ -755,7 +755,7 @@ function FinalAmazonListing({
             english={result.finalListing.title.english}
             chineseExplanation={result.finalListing.title.chineseExplanation}
             copyText={copyTexts.title}
-            copyLabel="Copy Title"
+            copyLabel="复制标题"
           />
 
           <div id="bullets" className="scroll-mt-24 overflow-hidden rounded-lg border border-line bg-white">
@@ -763,10 +763,10 @@ function FinalAmazonListing({
               <div>
                 <p className="text-sm font-semibold text-ink">Bullet Points</p>
                 <p className="mt-1 text-sm leading-6 text-neutral-500">
-                  Exactly 5 English bullets with separate Chinese explanations.
+                  5 条英文 Bullet，下方分别提供中文翻译。
                 </p>
               </div>
-              <CopyButton text={copyTexts.bulletPoints} label="Copy Bullet Points" />
+              <CopyButton text={copyTexts.bulletPoints} label="复制五点" />
             </div>
             {result.finalListing.bulletPoints.map((bullet, index) => (
               <article
@@ -788,7 +788,7 @@ function FinalAmazonListing({
                   </div>
                   <CopyButton
                     text={bullet.english}
-                    label="Copy"
+                    label="复制"
                     className="w-full shrink-0 sm:w-auto"
                   />
                 </div>
@@ -807,7 +807,7 @@ function FinalAmazonListing({
             english={result.finalListing.description.english}
             chineseExplanation={result.finalListing.description.chineseExplanation}
             copyText={copyTexts.description}
-            copyLabel="Copy Description"
+            copyLabel="复制描述"
           />
 
           <ListingFieldBlock
@@ -816,7 +816,7 @@ function FinalAmazonListing({
             english={result.finalListing.searchTerms.english}
             chineseExplanation={result.finalListing.searchTerms.chineseExplanation}
             copyText={copyTexts.searchTerms}
-            copyLabel="Copy Search Terms"
+            copyLabel="复制关键词"
           />
         </div>
       </ResultBlock>
@@ -1236,7 +1236,7 @@ function LanguageLabel({ children }: { children: string }) {
 function ChineseExplanation({ children }: { children: string }) {
   return (
     <div className="mt-3 rounded-lg bg-neutral-50 p-4">
-      <p className="text-xs font-semibold text-neutral-400">Chinese Explanation</p>
+      <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
       <p className="mt-1 text-sm leading-6 text-neutral-600">{children}</p>
     </div>
   );

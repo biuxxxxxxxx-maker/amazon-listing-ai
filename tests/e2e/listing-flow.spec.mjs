@@ -503,6 +503,18 @@ test.describe("listing creation and generation flow", () => {
     const savedGenerationRows = [];
     const savedProjectRows = [];
 
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          writeText: async () => {
+            throw new Error("clipboard permission denied");
+          },
+        },
+      });
+
+      document.execCommand = (command) => command === "copy";
+    });
     captureProjectInsertRequests(page, savedProjectRows);
     await mockSupabaseProjectApi(page, {
       project: lowInfoProject,
@@ -584,6 +596,13 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.locator("#bullets").getByText("Bullet Points").first()).toBeVisible();
     await expect(page.locator("#description").getByText("Product Description")).toBeVisible();
     await expect(page.locator("#search-terms").getByText("Search Terms", { exact: true })).toBeVisible();
+    await expect(page.locator("#final-listing")).toContainText("中文翻译");
+    await expect(page.locator("#final-listing")).not.toContainText("Chinese Explanation");
+    await expect(page.getByRole("button", { name: "复制完整 Listing" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制标题" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制五点" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制描述" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "复制关键词" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Listing Quality & Strategy" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Missing Info" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Compliance Notes" })).toBeVisible();
@@ -596,7 +615,14 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.locator("body")).not.toContainText(/\bundefined\b/i);
     await expect(page.locator("body")).not.toContainText(/\bnull\b/i);
     await expect(page.locator("body")).not.toContainText(/\bNaN\b/i);
-    await page.getByRole("button", { name: "复制英文 Listing" }).click();
+    await page.getByRole("button", { name: "复制完整 Listing" }).click();
+    await expect(page.getByRole("button", { name: "已复制" })).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("复制失败");
+    await page.evaluate(() => {
+      document.execCommand = () => false;
+    });
+    await page.getByRole("button", { name: "复制标题" }).click();
+    await expect(page.getByRole("button", { name: "请按 Ctrl+C" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("复制失败");
     await expect(page.locator("#title")).toBeVisible();
     await expect(page.locator("#bullets")).toBeVisible();
