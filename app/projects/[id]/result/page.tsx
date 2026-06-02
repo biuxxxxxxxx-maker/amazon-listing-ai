@@ -199,6 +199,20 @@ const strategyTextTranslationMap: Record<string, string> = {
 };
 
 const evidenceFieldTranslationMap: Record<string, string> = {
+  dimensions: "尺寸",
+  weight: "重量",
+  capacity: "容量",
+  size: "尺寸",
+  wheeltype: "轮子类型",
+  locktype: "锁具类型",
+  handlematerial: "拉杆材质",
+  shellmaterial: "箱壳材质",
+  expandable: "是否可扩展",
+  carryonconfirmation: "登机适配确认",
+  warranty: "保修",
+  brand: "品牌",
+  corefeatures: "核心功能",
+  packagequantity: "包装数量",
   material: "材质",
   category: "类目",
   color: "颜色",
@@ -209,6 +223,66 @@ const evidenceFieldTranslationMap: Record<string, string> = {
   marketplace: "站点",
   targetcustomer: "目标客户",
   usecases: "使用场景",
+};
+
+const displayLabelTranslationMap: Record<string, string> = {
+  "why it matters": "为什么重要",
+  example: "示例",
+  "impact area": "影响区域",
+  reason: "原因",
+  confidence: "置信度",
+  "should verify with user": "是否需要用户确认",
+  recommendation: "建议处理方式",
+  "related field": "相关字段",
+  details: "详情",
+  analysis: "分析",
+  "product summary": "产品总结",
+  "strategy summary": "策略总结",
+  "competitor summary": "竞品总结",
+  "compliance summary": "合规总结",
+  "beginner explanation": "新手说明",
+  "improvement suggestions": "优化建议",
+  "keyword patterns": "关键词模式",
+  "buyer pain points": "买家痛点",
+  "competitor angles": "竞品角度",
+  opportunities: "机会点",
+  "risky claims": "风险声明",
+  "blocked from final listing": "禁止进入最终 Listing",
+  "source basis": "来源依据",
+  "evidence fields": "依据字段",
+};
+
+const displayValueTranslationMap: Record<string, string> = {
+  title: "标题",
+  bulletpoints: "五点描述",
+  description: "描述",
+  compliance: "合规",
+  positioning: "定位",
+  conversion: "转化",
+  general: "通用",
+  high: "高优先级",
+  medium: "中优先级",
+  low: "低优先级",
+  yes: "是",
+  no: "否",
+  true: "是",
+  false: "否",
+  confirmed_fact: "已确认事实",
+  safe_inference: "安全推断",
+  competitor_inspired: "竞品启发",
+  "travel use": "旅行用途",
+  "amazon shoppers": "Amazon 买家",
+  professional: "专业",
+  "business travelers": "商务旅行者",
+  "weekend travel": "周末旅行",
+  "dorm room storage": "宿舍收纳",
+  "office desk organization": "办公室桌面整理",
+  "wheel noise": "轮子噪音",
+  "lightweight travel": "轻量旅行",
+  "competitor_claim": "竞品声明",
+  "competitor_claim_unconfirmed": "竞品声明未确认",
+  "entry-level travel suitcase positioned around practical travel use and confirmed product facts.": "入门级旅行行李箱，围绕实用旅行用途和已确认产品事实定位。",
+  "travel & luggage": "旅行与行李",
 };
 
 function translateStrategyText(value: unknown) {
@@ -260,6 +334,89 @@ function translateEvidenceFields(fields: string[]) {
     const normalized = normalizeTranslationKey(field).replace(/[^a-z0-9]/g, "");
     return evidenceFieldTranslationMap[normalized] || field;
   });
+}
+
+function translateDisplayText(value: unknown) {
+  const text = cleanDisplayText(value);
+  const normalized = normalizeTranslationKey(text);
+  const fieldKey = normalized.replace(/[^a-z0-9]/g, "");
+
+  if (displayValueTranslationMap[normalized]) {
+    return displayValueTranslationMap[normalized];
+  }
+
+  if (evidenceFieldTranslationMap[fieldKey]) {
+    return evidenceFieldTranslationMap[fieldKey];
+  }
+
+  const claim = translateClaim(text);
+  if (claim !== text) {
+    return claim;
+  }
+
+  const strategy = translateStrategyText(text);
+  if (strategy !== text) {
+    return strategy;
+  }
+
+  const translated = text
+    .replace(/\bconfirmed_fact\b/g, "已确认事实")
+    .replace(/\bsafe_inference\b/g, "安全推断")
+    .replace(/\bcompetitor_inspired\b/g, "竞品启发")
+    .replace(/\bbulletPoints\b/g, "五点描述")
+    .replace(/\bcompliance\b/g, "合规")
+    .replace(/\bconversion\b/g, "转化")
+    .replace(/\btitle\b/g, "标题")
+    .replace(/\bdescription\b/g, "描述")
+    .replace(/\bweight\b/g, "重量")
+    .replace(/\buseCases\b/g, "使用场景")
+    .replace(/\bcoreFeatures\b/g, "核心功能")
+    .replace(/\bpackageQuantity\b/g, "包装数量")
+    .replace(/\bdimensions\b/g, "尺寸")
+    .replace(/\bcapacity\b/g, "容量")
+    .replace(/\bwheelType\b/g, "轮子类型")
+    .replace(/\blockType\b/g, "锁具类型")
+    .replace(/\bhandleMaterial\b/g, "拉杆材质")
+    .replace(/\bshellMaterial\b/g, "箱壳材质")
+    .replace(/\bcarryOnConfirmation\b/g, "登机适配确认")
+    .replace(/\bwarranty\b/g, "保修")
+    .replace(/\bhigh\b/g, "高优先级")
+    .replace(/\bmedium\b/g, "中优先级")
+    .replace(/\blow\b/g, "低优先级")
+    .replace(/\bclaim\b/g, "声明")
+    .replace(/\bListing\b/g, "Listing")
+    .replace(/\bAmazon\b/g, "Amazon")
+    .replace(/\bentry-level travel suitcase\b/gi, "入门级旅行行李箱")
+    .replace(/\bpractical travel use\b/gi, "实用旅行用途")
+    .replace(/\bconfirmed product facts\b/gi, "已确认产品事实")
+    .replace(/\bcentered on suitcase\b/gi, "围绕行李箱")
+    .replace(/\bsource\b/gi, "来源");
+
+  if (translated !== text) {
+    return translated
+      .replace(/([\u4e00-\u9fff])\s+([\u4e00-\u9fff])/g, "$1$2")
+      .replace(/\s+([，。；：])/g, "$1");
+  }
+
+  return text;
+}
+
+function formatBilingualTitle(value: unknown) {
+  const english = cleanDisplayText(value);
+  const chinese = translateDisplayText(english);
+
+  return chinese !== english ? `${english} / ${chinese}` : english;
+}
+
+function formatBilingualLabel(value: string) {
+  const normalized = normalizeTranslationKey(value);
+  const chinese = displayLabelTranslationMap[normalized] || translateDisplayText(value);
+
+  return chinese !== value ? `${value} / ${chinese}` : value;
+}
+
+function shouldShowBilingualSummary(value: string, translation: string) {
+  return translation !== value && value.length <= 42 && !/[。.!?]/.test(value);
 }
 
 function translateSellingPointOrderItem(
@@ -868,8 +1025,8 @@ function FinalAmazonListing({
   return (
     <section id="final-listing" className="scroll-mt-24">
       <ResultBlock
-        title="Final Amazon Listing"
-        eyebrow="可复制"
+        title="Final Amazon Listing / 最终亚马逊 Listing"
+        eyebrow="Copy Ready / 可复制"
         description="这是第一优先级结果，可复制到 Amazon 后台；中文解释只用于理解。"
         copyText={copyTexts.full}
         copyLabel="复制完整 Listing"
@@ -956,8 +1113,8 @@ function ListingQualityAndStrategy({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="quality-strategy"
-      title="Listing Quality & Strategy"
-      eyebrow="Strategy"
+      title="Listing Quality & Strategy / Listing 质量与策略"
+      eyebrow="Strategy / 策略"
       description="展示资料质量、关键词策略、定位方向和 claim 边界。"
     >
       <div className="grid gap-4">
@@ -1004,8 +1161,8 @@ function MissingInfoSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="missing-info"
-      title="Missing Info"
-      eyebrow="Input Quality"
+      title="Missing Info / 缺失信息"
+      eyebrow="Input Quality / 输入质量"
       description="这些缺失信息会影响 Listing 精度、合规边界或转化表达。"
     >
       {items.length > 0 ? (
@@ -1035,8 +1192,8 @@ function AssumptionsSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="assumptions"
-      title="Assumptions"
-      eyebrow="Conservative Inference"
+      title="Assumptions / 保守假设"
+      eyebrow="Conservative Inference / 保守推断"
       description="低信息输入时，系统做出的保守假设会在这里明示。"
     >
       {items.length > 0 ? (
@@ -1066,8 +1223,8 @@ function ComplianceNotesSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="compliance-notes"
-      title="Compliance Notes"
-      eyebrow="Risk Control"
+      title="Compliance Notes / 合规提醒"
+      eyebrow="Risk Control / 风险控制"
       description="展示 DeepSeek 结果中的风险 claim、原因和建议处理方式。"
     >
       {items.length > 0 ? (
@@ -1103,8 +1260,8 @@ function CompetitorInsightsSection({
   return (
     <ResultBlock
       id="competitor-insights"
-      title="Competitor Insights"
-      eyebrow="Market Pattern"
+      title="Competitor Insights / 竞品洞察"
+      eyebrow="Market Pattern / 市场模式"
       description="竞品内容只用于关键词、市场模式、痛点和机会，不直接复制进 Final Listing。"
     >
       {!hasCompetitorInput ? (
@@ -1113,22 +1270,22 @@ function CompetitorInsightsSection({
         </SoftNote>
       ) : (
         <div className="grid gap-4">
-          <InfoList title="Keyword Patterns" items={insights.keywordPatterns} />
-          <InfoList title="Buyer Pain Points" items={insights.buyerPainPoints} />
-          <InfoList title="Competitor Angles" items={insights.competitorAngles} />
+          <InfoList title="Keyword Patterns / 关键词模式" items={insights.keywordPatterns} />
+          <InfoList title="Buyer Pain Points / 买家痛点" items={insights.buyerPainPoints} />
+          <InfoList title="Competitor Angles / 竞品角度" items={insights.competitorAngles} />
           <InfoList
-            title="Opportunities"
+            title="Opportunities / 机会点"
             items={insights.opportunities.map(
               (item) =>
                 `${item.opportunity}${item.requiredConfirmation ? ` Required: ${item.requiredConfirmation}` : ""}`,
             )}
           />
           <InfoList
-            title="Risky Claims"
+            title="Risky Claims / 风险声明"
             items={insights.riskyClaims.map((item) => `${item.claim}: ${item.reason}`)}
           />
           <InfoList
-            title="Blocked From Final Listing"
+            title="Blocked From Final Listing / 禁止进入最终 Listing"
             items={insights.blockedFromFinalListing.map(
               (item) => `${item.claim}: ${item.reason}`,
             )}
@@ -1156,13 +1313,13 @@ function ExpertAnalysisSection({ result }: { result: GenerationResult }) {
   return (
     <ResultBlock
       id="expert-analysis"
-      title="Expert Suggestions / Analysis"
-      eyebrow="Explanation"
+      title="Expert Suggestions / Analysis / 专家建议与分析"
+      eyebrow="Explanation / 说明"
       description="给新手看的运营解释和后续优化建议。"
     >
       <div className="grid gap-4">
         <InfoList
-          title="Improvement Suggestions"
+          title="Improvement Suggestions / 优化建议"
           items={suggestions}
         />
         <StructuredItem
@@ -1225,10 +1382,10 @@ function StructuredItem({
 
   return (
     <article className="rounded-lg border border-line bg-white p-4">
-      <p className="text-sm font-semibold text-ink">{cleanDisplayText(title)}</p>
+      <p className="text-sm font-semibold text-ink">{formatBilingualTitle(title)}</p>
       <div className="mt-3 grid gap-2">
         {rowsToRender.map(([label, value]) => (
-          <MetaLine key={label} label={label} value={value} />
+          <BilingualDetailLine key={label} label={label} value={value} />
         ))}
       </div>
     </article>
@@ -1236,14 +1393,20 @@ function StructuredItem({
 }
 
 function InfoCard({ label, value }: { label: string; value: unknown }) {
+  const english = cleanDisplayText(value);
+  const chinese = translateDisplayText(english);
+
   return (
     <div className="rounded-lg border border-line bg-white p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
         {label}
       </p>
       <p className="mt-2 text-sm font-semibold leading-6 text-ink">
-        {cleanDisplayText(value)}
+        {english}
       </p>
+      {chinese !== english ? (
+        <p className="mt-1 text-sm leading-6 text-neutral-500">{chinese}</p>
+      ) : null}
     </div>
   );
 }
@@ -1263,14 +1426,23 @@ function InfoList({
     <div className="rounded-lg border border-line bg-white p-4">
       <p className="text-sm font-semibold text-ink">{title}</p>
       {displayItems.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 grid gap-2">
           {displayItems.map((item) => (
-            <span
+            <div
               key={item}
-              className="rounded-full border border-line bg-paper px-3 py-1.5 text-sm leading-5 text-neutral-700"
+              className="rounded-lg border border-line bg-paper px-3 py-2"
             >
-              {item}
-            </span>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                英文原文
+              </p>
+              <p className="mt-1 text-sm leading-6 text-neutral-700">{item}</p>
+              <div className="mt-2 rounded-md bg-white/80 px-3 py-2">
+                <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
+                <p className="mt-1 text-sm leading-6 text-neutral-600">
+                  {translateDisplayText(item)}
+                </p>
+              </div>
+            </div>
           ))}
         </div>
       ) : (
@@ -1372,12 +1544,46 @@ function EmptySection({ text }: { text: string }) {
 }
 
 function MetaLine({ label, value }: { label: string; value: unknown }) {
+  const english = cleanDisplayText(value);
+  const chinese = translateDisplayText(english);
+
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-2.5">
-      <p className="text-[11px] font-semibold text-neutral-400">{label}</p>
+      <p className="text-[11px] font-semibold text-neutral-400">{formatBilingualLabel(label)}</p>
       <p className="mt-1 text-sm leading-6 text-neutral-700">
-        {cleanDisplayText(value)}
+        {english}
       </p>
+      {chinese !== english ? (
+        <p className="mt-1 text-sm leading-6 text-neutral-500">{chinese}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function BilingualDetailLine({ label, value }: { label: string; value: unknown }) {
+  const english = cleanDisplayText(value);
+  const chinese = translateDisplayText(english);
+
+  return (
+    <div className="rounded-lg border border-line bg-white px-3 py-3">
+      <p className="text-[11px] font-semibold text-neutral-400">
+        {formatBilingualLabel(label)}
+      </p>
+      {shouldShowBilingualSummary(english, chinese) ? (
+        <p className="mt-2 text-sm font-semibold leading-6 text-ink">
+          {english} / {chinese}
+        </p>
+      ) : null}
+      <div className="mt-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+          英文原文
+        </p>
+        <p className="mt-1 text-sm leading-6 text-neutral-700">{english}</p>
+      </div>
+      <div className="mt-3 rounded-md bg-neutral-50 px-3 py-2">
+        <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
+        <p className="mt-1 text-sm leading-6 text-neutral-600">{chinese}</p>
+      </div>
     </div>
   );
 }
@@ -1402,8 +1608,11 @@ function ChineseExplanation({ children }: { children: string }) {
 function SoftNote({ label, children }: { label: string; children: string }) {
   return (
     <div className="rounded-lg bg-amberSoft p-4 text-sm leading-6 text-[#8a5a1e]">
-      <p className="text-xs font-semibold text-[#9a681f]">{label}</p>
+      <p className="text-xs font-semibold text-[#9a681f]">{formatBilingualLabel(label)}</p>
       <p className="mt-1">{children}</p>
+      {translateDisplayText(children) !== children ? (
+        <p className="mt-2 text-[#8a5a1e]/80">{translateDisplayText(children)}</p>
+      ) : null}
     </div>
   );
 }

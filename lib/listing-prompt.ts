@@ -35,6 +35,7 @@ export function buildListingUserPrompt(
     "",
     "Return only these top-level fields in the model response: finalListing, complianceNotes, missingInfo, assumptions, improvementSuggestions, analysis.",
     "Do not return schemaVersion, source, generatedAt, model, qualityScore, productBrief, competitorInsights, or listingStrategy; the server will fill them.",
+    "Use English for all non-finalListing explanatory string fields so the result page can show English original text with a Chinese translation.",
     "finalListing must contain title, exactly 5 bulletPoints, description, and searchTerms.",
     'Each finalListing field must include "english" and "chineseExplanation".',
     'For finalListing only, every "chineseExplanation" must first translate the adjacent English copy into Chinese; do not merely explain why the copy was written.',
