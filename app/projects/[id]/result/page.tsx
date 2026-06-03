@@ -170,6 +170,7 @@ const claimTranslationMap: Record<string, string> = {
   "heavy-duty": "重型承重",
   "heavy duty": "重型承重",
   "pc shell": "PC 外壳",
+  "pc hardshell": "PC 硬壳",
   "abs shell": "ABS 外壳",
   "black color": "黑色",
   "travel suitcase": "旅行行李箱",
@@ -295,6 +296,14 @@ const displayValueTranslationMap: Record<string, string> = {
   "pc shell, black color, travel suitcase": "PC 外壳、黑色、旅行行李箱",
   "plastic material, black color, travel suitcase": "塑料材质、黑色、旅行行李箱",
   "塑料 material, black color, travel suitcase": "塑料材质、黑色、旅行行李箱",
+  "20 inch carry-on": "20 英寸登机箱",
+  "22 x 14 x 9 inches": "22 x 14 x 9 英寸",
+  "6.4 lbs": "6.4 磅",
+  "360° silent spinner wheels": "360° 静音万向轮",
+  "aluminum telescopic handle": "铝合金拉杆",
+  "fits most airline carry-on guidance": "符合多数航空公司登机箱参考指南",
+  "fits common carry-on size guidance, verify airline rules": "符合常见登机箱尺寸参考，请确认具体航空公司规则",
+  "abs shell, pc hardshell": "ABS 外壳、PC 硬壳",
 };
 
 function translateStrategyText(value: unknown): string {
@@ -396,6 +405,12 @@ function translateDisplayText(value: unknown): string {
     .replace(/\buseCases\b/g, "使用场景")
     .replace(/\bcoreFeatures\b/g, "核心功能")
     .replace(/\bpackageQuantity\b/g, "包装数量")
+    .replace(/\bTSA lock\b/gi, "TSA 锁")
+    .replace(/\bairline approved\b/gi, "航空公司批准")
+    .replace(/\blarge capacity\b/gi, "大容量")
+    .replace(/\bspinner wheels\b/gi, "万向轮")
+    .replace(/\bPC hardshell\b/gi, "PC 硬壳")
+    .replace(/\bABS shell\b/gi, "ABS 外壳")
     .replace(/\bdimensions\b/g, "尺寸")
     .replace(/\bcapacity\b/g, "容量")
     .replace(/\bwheelType\b/g, "轮子类型")

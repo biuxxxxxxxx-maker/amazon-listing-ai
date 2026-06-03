@@ -222,6 +222,12 @@ const workUpGenerationResult = {
       example: "fits most airline carry-on guidance",
       impactArea: "compliance",
     },
+    {
+      field: "shellMaterial",
+      whyItMatters: "箱壳材质会影响防刮、抗压、重量等高风险表达。",
+      example: "ABS shell, PC hardshell",
+      impactArea: "compliance",
+    },
   ],
   assumptions: [
     {
@@ -652,6 +658,8 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.locator("#missing-info")).toContainText("重量 / weight");
     await expect(page.locator("#missing-info")).toContainText("为什么重要 / Why It Matters");
     await expect(page.locator("#missing-info")).toContainText("五点描述 / bulletPoints");
+    await expect(page.locator("#missing-info")).toContainText("符合多数航空公司登机箱参考指南");
+    await expect(page.locator("#missing-info")).toContainText("ABS 外壳、PC 硬壳");
     await expect(page.getByRole("heading", { name: "保守假设 / Assumptions" })).toBeVisible();
     await expect(page.locator("#assumptions")).toContainText("行李箱用于常规旅行用途。");
     await expect(page.locator("#assumptions")).toContainText("英文原文");
