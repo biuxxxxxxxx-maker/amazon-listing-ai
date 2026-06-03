@@ -196,6 +196,7 @@ const strategyTextTranslationMap: Record<string, string> = {
   "material confirmed by user input": "材质来自用户确认输入。",
   "color confirmed by user input": "颜色来自用户确认输入。",
   "category confirmed by user input": "类目来自用户确认输入。",
+  "the provided category is the strongest confirmed business context.": "已提供的类目是目前最强的已确认业务背景。",
 };
 
 const evidenceFieldTranslationMap: Record<string, string> = {
@@ -283,9 +284,20 @@ const displayValueTranslationMap: Record<string, string> = {
   "competitor_claim_unconfirmed": "竞品声明未确认",
   "entry-level travel suitcase positioned around practical travel use and confirmed product facts.": "入门级旅行行李箱，围绕实用旅行用途和已确认产品事实定位。",
   "travel & luggage": "旅行与行李",
+  "the suitcase is for general travel use.": "行李箱用于常规旅行用途。",
+  "category is travel & luggage.": "类目是旅行与行李。",
+  "carry-on wording should stay qualified as common or most airline guidance.": "登机箱相关表述应限定为常见或多数航空公司指南。",
+  "the input gives dimensions but not a specific airline policy.": "输入提供了尺寸，但没有提供具体航空公司政策。",
+  "unconfirmed specifications should stay out of the final listing copy.": "未确认规格不应进入最终 Listing 文案。",
+  "missing size, capacity, warranty, certification, or feature proof creates claim risk.": "缺少尺寸、容量、保修、认证或功能证明会产生声明风险。",
+  "confirmed safe claims can be used as the primary selling-point base.": "已确认的安全声明可以作为主要卖点基础。",
+  "abs shell, black color, travel suitcase": "ABS 外壳、黑色、旅行行李箱",
+  "pc shell, black color, travel suitcase": "PC 外壳、黑色、旅行行李箱",
+  "plastic material, black color, travel suitcase": "塑料材质、黑色、旅行行李箱",
+  "塑料 material, black color, travel suitcase": "塑料材质、黑色、旅行行李箱",
 };
 
-function translateStrategyText(value: unknown) {
+function translateStrategyText(value: unknown): string {
   const text = cleanDisplayText(value);
   const normalized = normalizeTranslationKey(text);
   const translated = strategyTextTranslationMap[normalized];
@@ -302,6 +314,18 @@ function translateStrategyText(value: unknown) {
   if (normalized.includes("travel suitcase identity")) {
     const descriptor = text.replace(/travel suitcase identity/i, "").trim();
     return descriptor ? `${descriptor}旅行行李箱定位` : "旅行行李箱定位";
+  }
+
+  if (normalized.includes("is positioned for practical buyer use")) {
+    const descriptor = text
+      .replace(/is positioned for practical buyer use\.?/i, "")
+      .trim();
+    const translatedDescriptor =
+      displayValueTranslationMap[normalizeTranslationKey(descriptor)] || descriptor;
+
+    return translatedDescriptor
+      ? `${translatedDescriptor}按实用买家用途定位。`
+      : "按实用买家用途定位。";
   }
 
   return text;
@@ -336,7 +360,7 @@ function translateEvidenceFields(fields: string[]) {
   });
 }
 
-function translateDisplayText(value: unknown) {
+function translateDisplayText(value: unknown): string {
   const text = cleanDisplayText(value);
   const normalized = normalizeTranslationKey(text);
   const fieldKey = normalized.replace(/[^a-z0-9]/g, "");
@@ -399,6 +423,24 @@ function translateDisplayText(value: unknown) {
   }
 
   return text;
+}
+
+function translateDisplayValueForLabel(label: string, value: unknown) {
+  const text = cleanDisplayText(value);
+  const normalizedLabel = normalizeTranslationKey(label);
+  const normalizedValue = normalizeTranslationKey(text);
+
+  if (normalizedLabel === "confidence") {
+    const confidenceValueTranslationMap: Record<string, string> = {
+      high: "高",
+      medium: "中",
+      low: "低",
+    };
+
+    return confidenceValueTranslationMap[normalizedValue] || translateDisplayText(text);
+  }
+
+  return translateDisplayText(text);
 }
 
 function formatBilingualTitle(value: unknown) {
@@ -1545,7 +1587,7 @@ function EmptySection({ text }: { text: string }) {
 
 function MetaLine({ label, value }: { label: string; value: unknown }) {
   const english = cleanDisplayText(value);
-  const chinese = translateDisplayText(english);
+  const chinese = translateDisplayValueForLabel(label, english);
 
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-2.5">
@@ -1562,7 +1604,7 @@ function MetaLine({ label, value }: { label: string; value: unknown }) {
 
 function BilingualDetailLine({ label, value }: { label: string; value: unknown }) {
   const english = cleanDisplayText(value);
-  const chinese = translateDisplayText(english);
+  const chinese = translateDisplayValueForLabel(label, english);
 
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-3">

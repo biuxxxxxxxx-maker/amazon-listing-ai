@@ -230,6 +230,12 @@ const workUpGenerationResult = {
       confidence: "medium",
       shouldVerifyWithUser: true,
     },
+    {
+      assumption: "Travel & Luggage is positioned for practical buyer use.",
+      reason: "The provided category is the strongest confirmed business context.",
+      confidence: "high",
+      shouldVerifyWithUser: false,
+    },
   ],
   improvementSuggestions: [
     {
@@ -640,12 +646,26 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.locator("#quality-strategy")).toContainText("未确认。");
     await expect(page.locator("#quality-strategy")).toContainText("安全可用声明 / Safe Claims");
     await expect(page.locator("#quality-strategy")).toContainText("PC 外壳");
-    await expect(page.getByRole("heading", { name: "Missing Info" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "缺失信息 / Missing Info" })).toBeVisible();
     await expect(page.locator("#missing-info")).toContainText("英文原文");
     await expect(page.locator("#missing-info")).toContainText("中文翻译");
     await expect(page.locator("#missing-info")).toContainText("重量 / weight");
     await expect(page.locator("#missing-info")).toContainText("为什么重要 / Why It Matters");
     await expect(page.locator("#missing-info")).toContainText("五点描述 / bulletPoints");
+    await expect(page.getByRole("heading", { name: "保守假设 / Assumptions" })).toBeVisible();
+    await expect(page.locator("#assumptions")).toContainText("行李箱用于常规旅行用途。");
+    await expect(page.locator("#assumptions")).toContainText("英文原文");
+    await expect(page.locator("#assumptions")).toContainText("中文翻译");
+    await expect(page.locator("#assumptions")).toContainText("原因 / Reason");
+    await expect(page.locator("#assumptions")).toContainText("类目是旅行与行李。");
+    await expect(page.locator("#assumptions")).toContainText("置信度 / Confidence");
+    await expect(page.locator("#assumptions")).toContainText("中 / medium");
+    await expect(page.locator("#assumptions")).toContainText("是否需要用户确认 / Should Verify With User");
+    await expect(page.locator("#assumptions")).toContainText("是 / yes");
+    await expect(page.locator("#assumptions")).toContainText("旅行与行李按实用买家用途定位。");
+    await expect(page.locator("#assumptions")).toContainText("已提供的类目是目前最强的已确认业务背景。");
+    await expect(page.locator("#assumptions")).toContainText("高 / high");
+    await expect(page.locator("#assumptions")).toContainText("否 / no");
     await expect(page.getByRole("heading", { name: "合规提醒 / Compliance Notes" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "专家建议与分析 / Expert Suggestions / Analysis" })).toBeVisible();
     await expect(page.locator("#expert-analysis")).toContainText("优化建议 / Improvement Suggestions");
