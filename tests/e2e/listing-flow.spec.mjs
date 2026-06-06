@@ -642,6 +642,11 @@ test.describe("listing creation and generation flow", () => {
     await expect(page.getByRole("button", { name: "复制五点" })).toBeVisible();
     await expect(page.getByRole("button", { name: "复制描述" })).toBeVisible();
     await expect(page.getByRole("button", { name: "复制关键词" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "中文可读性检查 / Chinese Readability Check" })).toBeVisible();
+    await expect(page.locator("#display-audit")).toContainText("复制内容：仅英文");
+    await expect(page.locator("#display-audit")).toContainText("五点描述：5 条");
+    await expect(page.locator("#display-audit")).toContainText("中文解释：基础检查通过");
+    await expect(page.locator("#display-audit")).not.toContainText("需要中文 / Needs Chinese");
     await expect(page.getByRole("heading", { name: "Listing 质量与策略 / Listing Quality & Strategy" })).toBeVisible();
     await expect(page.locator("#quality-strategy")).toContainText("卖点排序 / Selling Point Order");
     await expect(page.locator("#quality-strategy")).toContainText("英文原文");

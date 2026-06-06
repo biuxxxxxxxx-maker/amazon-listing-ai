@@ -36,6 +36,7 @@ const loadingMessage = "正在基于产品资料、竞品洞察和 Listing 策�
 
 const resultNavItems = [
   ["最终 Listing", "final-listing"],
+  ["展示检查", "display-audit"],
   ["质量与策略", "quality-strategy"],
   ["缺失信息", "missing-info"],
   ["保守假设", "assumptions"],
@@ -476,6 +477,104 @@ function shouldShowBilingualSummary(value: string, translation: string) {
   return translation !== value && value.length <= 42 && !/[。.!?]/.test(value);
 }
 
+type DisplayAuditIssue = {
+  section: string;
+  label: string;
+  source: string;
+};
+
+type DisplayAudit = {
+  issues: DisplayAuditIssue[];
+  bulletCount: number;
+  finalListingComplete: boolean;
+};
+
+function countChineseCharacters(value: string) {
+  return value.match(/[\u3400-\u9fff]/g)?.length ?? 0;
+}
+
+function countLatinWords(value: string) {
+  return value.match(/[A-Za-z][A-Za-z-]{1,}/g)?.length ?? 0;
+}
+
+function hasWeakChineseTranslation(source: string, translation: string) {
+  const cleanSource = cleanDisplayText(source, "");
+  const cleanTranslation = cleanDisplayText(translation, "");
+
+  if (!cleanSource || !cleanTranslation) {
+    return false;
+  }
+
+  const latinWords = countLatinWords(cleanTranslation);
+  const chineseChars = countChineseCharacters(cleanTranslation);
+  const repeatsSource = normalizeTranslationKey(cleanSource) === normalizeTranslationKey(cleanTranslation);
+
+  if (repeatsSource && countLatinWords(cleanSource) >= 2 && countChineseCharacters(cleanSource) < 4) {
+    return true;
+  }
+
+  return latinWords >= 3 && chineseChars < 4;
+}
+
+function getResultDisplayAudit(result: GenerationResult): DisplayAudit {
+  const issues: DisplayAuditIssue[] = [];
+
+  function addIssueIfWeak(section: string, label: string, value: unknown) {
+    const source = cleanDisplayText(value, "");
+
+    if (!source) {
+      return;
+    }
+
+    const translation = translateDisplayValueForLabel(label, source);
+
+    if (hasWeakChineseTranslation(source, translation)) {
+      issues.push({ section, label: formatBilingualLabel(label), source });
+    }
+  }
+
+  function addFinalExplanation(section: string, label: string, value: unknown) {
+    const explanation = cleanDisplayText(value, "");
+
+    if (hasWeakChineseTranslation(label, explanation)) {
+      issues.push({ section, label, source: explanation || "未提供中文解释" });
+    }
+  }
+
+  addFinalExplanation("最终 Listing", "标题中文解释", result.finalListing.title.chineseExplanation);
+  result.finalListing.bulletPoints.forEach((item, index) => {
+    addFinalExplanation("最终 Listing", `五点 ${index + 1} 中文解释`, item.chineseExplanation);
+  });
+  addFinalExplanation("最终 Listing", "描述中文解释", result.finalListing.description.chineseExplanation);
+  addFinalExplanation("最终 Listing", "关键词中文解释", result.finalListing.searchTerms.chineseExplanation);
+
+  result.missingInfo.forEach((item) => {
+    addIssueIfWeak("缺失信息", "Why It Matters", item.whyItMatters);
+    addIssueIfWeak("缺失信息", "Example", item.example);
+    addIssueIfWeak("缺失信息", "Impact Area", item.impactArea);
+  });
+
+  result.assumptions.forEach((item) => {
+    addIssueIfWeak("保守假设", "Assumption", item.assumption);
+    addIssueIfWeak("保守假设", "Reason", item.reason);
+    addIssueIfWeak("保守假设", "Confidence", item.confidence);
+    addIssueIfWeak("保守假设", "Should Verify With User", item.shouldVerifyWithUser);
+  });
+
+  const finalListingComplete = Boolean(
+    cleanDisplayText(result.finalListing.title.english, "") &&
+      result.finalListing.bulletPoints.length === 5 &&
+      cleanDisplayText(result.finalListing.description.english, "") &&
+      cleanDisplayText(result.finalListing.searchTerms.english, ""),
+  );
+
+  return {
+    issues,
+    bulletCount: result.finalListing.bulletPoints.length,
+    finalListingComplete,
+  };
+}
+
 function translateSellingPointOrderItem(
   item: GenerationResult["listingStrategy"]["sellingPointOrder"][number],
 ) {
@@ -581,6 +680,13 @@ export default function ResultPage() {
       description: copyDescription(displayResult),
       searchTerms: copySearchTerms(displayResult),
     };
+  }, [displayResult, hasValidResult]);
+  const displayAudit = useMemo(() => {
+    if (!displayResult || !hasValidResult) {
+      return null;
+    }
+
+    return getResultDisplayAudit(displayResult);
   }, [displayResult, hasValidResult]);
 
   useEffect(() => {
@@ -973,6 +1079,7 @@ export default function ResultPage() {
 
               <div className="grid gap-5">
                 <FinalAmazonListing result={displayResult} copyTexts={copyTexts} />
+                {displayAudit ? <ResultDisplayAuditPanel audit={displayAudit} /> : null}
                 <ListingQualityAndStrategy result={displayResult} />
                 <MissingInfoSection result={displayResult} />
                 <AssumptionsSection result={displayResult} />
@@ -1161,6 +1268,78 @@ function FinalAmazonListing({
         </div>
       </ResultBlock>
     </section>
+  );
+}
+
+function AuditStatusItem({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "green" | "amber" | "neutral";
+}) {
+  const toneClass =
+    tone === "green"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : tone === "amber"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : "border-line bg-white text-neutral-700";
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 text-sm leading-6 ${toneClass}`}>
+      <p className="text-[11px] font-semibold text-current/65">{label}</p>
+      <p className="mt-1 font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function ResultDisplayAuditPanel({ audit }: { audit: DisplayAudit }) {
+  const hasIssues = audit.issues.length > 0;
+  const chineseStatus = hasIssues
+    ? `中文解释：${audit.issues.length} 处需要确认`
+    : "中文解释：基础检查通过";
+
+  return (
+    <ResultBlock
+      id="display-audit"
+      eyebrow="展示 QA / Display QA"
+      title="中文可读性检查 / Chinese Readability Check"
+      description="系统会先检查最终 Listing 完整度、复制边界和中文解释质量，避免把英文重复当成中文翻译。"
+    >
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AuditStatusItem label="复制边界" value="复制内容：仅英文" tone="green" />
+        <AuditStatusItem
+          label="最终 Listing"
+          value={audit.finalListingComplete ? "最终 Listing：完整" : "最终 Listing：需确认"}
+          tone={audit.finalListingComplete ? "green" : "amber"}
+        />
+        <AuditStatusItem label="五点数量" value={`五点描述：${audit.bulletCount} 条`} tone="green" />
+        <AuditStatusItem
+          label="中文解释"
+          value={chineseStatus}
+          tone={hasIssues ? "amber" : "green"}
+        />
+      </div>
+
+      {hasIssues ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <p className="font-semibold">需要中文 / Needs Chinese</p>
+          <div className="mt-2 grid gap-2">
+            {audit.issues.slice(0, 4).map((issue, index) => (
+              <p key={`${issue.section}-${issue.label}-${index}`}>
+                {issue.section}：{issue.label} 需要补中文解释。
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-800">
+          基础检查通过：没有发现明显英文重复、空中文解释或五点数量异常。
+        </p>
+      )}
+    </ResultBlock>
   );
 }
 
@@ -1620,13 +1799,17 @@ function MetaLine({ label, value }: { label: string; value: unknown }) {
 function BilingualDetailLine({ label, value }: { label: string; value: unknown }) {
   const english = cleanDisplayText(value);
   const chinese = translateDisplayValueForLabel(label, english);
+  const needsChinese = hasWeakChineseTranslation(english, chinese);
+  const readableChinese = needsChinese
+    ? "这条中文解释还不完整，已标记为需人工确认。"
+    : chinese;
 
   return (
     <div className="rounded-lg border border-line bg-white px-3 py-3">
       <p className="text-[11px] font-semibold text-neutral-400">
         {formatBilingualLabel(label)}
       </p>
-      {shouldShowBilingualSummary(english, chinese) ? (
+      {shouldShowBilingualSummary(english, chinese) && !needsChinese ? (
         <p className="mt-2 text-sm font-semibold leading-6 text-ink">
           {chinese} / {english}
         </p>
@@ -1638,8 +1821,15 @@ function BilingualDetailLine({ label, value }: { label: string; value: unknown }
         <p className="mt-1 text-sm leading-6 text-neutral-700">{english}</p>
       </div>
       <div className="mt-3 rounded-md bg-neutral-50 px-3 py-2">
-        <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
-        <p className="mt-1 text-sm leading-6 text-neutral-600">{chinese}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-semibold text-neutral-400">中文翻译</p>
+          {needsChinese ? (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              需要中文 / Needs Chinese
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 text-sm leading-6 text-neutral-600">{readableChinese}</p>
       </div>
     </div>
   );
